@@ -51,6 +51,18 @@ register:
   coarse: fpfh_ransac
   fine: icp_point_to_plane
   estimate_scale: true
+  # Lengths below are in normalised units: each cloud is divided by its median radius.
+  voxel: 0.01                      # downsampling for FPFH + RANSAC
+  normal_radius_factor: 2.5        # x voxel
+  fpfh_radius_factor: 5            # x voxel
+  ransac_distance_factor: 1.5      # x voxel
+  ransac_max_iterations: 1000000
+  ransac_confidence: 0.9999
+  icp_voxel: 0.004                 # downsampling for ICP
+  icp_max_distance_factor: 2.5     # x icp_voxel
+  icp_max_iterations: 200          # joint 7-DoF point-to-plane steps (D-015)
+  converge_scale: 1.0e-5           # stop when a step changes scale by less than this
+  converge_rot_deg: 1.0e-3         # ... and rotation by less than this
 
 segment:
   methods: [ortho, multiview]      # ortho = guaranteed baseline, multiview = main method
@@ -58,6 +70,34 @@ segment:
   min_stone_area_m2: 0.002
   max_stone_area_m2: 1.0
   multiview_affinity_threshold: 0.5
+  contain_frac: 0.9                # a mask containing >= 90 % of a smaller one is dropped
+  ortho_hole_close_px: 11          # closing size for the orthophoto coverage mask
+  nonmetric:                       # used while transform.json says metric: false (D-016)
+    ortho_gsd: 0.004               # scene units per pixel (~ half the point spacing)
+    min_stone_area: 0.008          # scene units^2 (about 0.09 x 0.09)
+    max_stone_area: 4.0            # scene units^2
+  multiview:
+    depth_rel_tol: 0.02            # point kept in a view if |z - depth| <= 2 % of depth
+    min_mask_px: 400               # per-image masks smaller than this are ignored
+    max_mask_frac: 0.15            # ... and masks larger than this fraction of the image
+    graph_point_fraction: 0.2      # points sampled to count mask-pair intersections
+    min_edge_points: 20            # sampled shared points needed for an edge
+    min_cluster_masks: 2           # a stone must be seen as a mask in >= 2 images
+    min_votes: 2                   # a point needs >= 2 agreeing observations
+    min_vote_frac: 0.4             # ... and >= 40 % of the views that see it
+    n_debug_views: 6
+    sam:                           # overrides of segment.sam for the 1600 px photos
+      points_per_side: 32
+      crop_n_layers: 0
+  sam:                             # SAM2AutomaticMaskGenerator arguments (D-010)
+    points_per_side: 48
+    points_per_batch: 64
+    pred_iou_thresh: 0.8
+    stability_score_thresh: 0.9
+    box_nms_thresh: 0.7
+    crop_n_layers: 1               # extra 2x2 crops find small stones on a large image
+    crop_n_points_downscale_factor: 1
+    min_mask_region_area: 0
 
 evaluate:
   min_gt_stones: 30
