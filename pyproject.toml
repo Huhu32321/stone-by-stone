@@ -48,4 +48,4 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "N"]
-ignore = ["N806"]  # allow math-style names such as T_wall_from_world, K, R
+ignore = ["N802", "N803", "N806"]  # math-style names: T_wall_from_world, K, R, apply_T
