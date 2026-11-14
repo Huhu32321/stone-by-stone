@@ -176,6 +176,49 @@ plane is then refined by least squares over all inliers.
 Ruff's pep8-naming rules N802/N803 are ignored in addition to N806, because the
 project's frame-naming convention (`T_wall_from_world`, `apply_T`) requires capitals.
 
+### D-015 Fine registration: joint 7-DoF point-to-plane ICP instead of Umeyama between rounds
+**Date:** 2026-11-14 · **By:** claude-code
+
+The spec asks for point-to-plane ICP with scale re-estimated by Umeyama between rounds.
+Implemented as written, on a synthetic wall with a known similarity (scale 0.37, 120°
+rotation), scale crept by only about 0.1 % per round and had not converged after 20
+rounds (still 0.8 % off): point-to-point Umeyama on nearest-neighbour pairs is biased
+and slow along the surface. The stage now solves scale, rotation and translation jointly
+in each ICP iteration, by a linearised point-to-plane least-squares step about the
+source centroid. On the same synthetic case it converges in 12 iterations to scale error
+1e-5 (relative) and rotation error 0.0002°. Umeyama is still used for the camera-pose
+reference and in the unit tests. Coarse alignment is unchanged (FPFH + RANSAC with
+scaling, on clouds normalised to unit median radius so feature radii are comparable).
+
+The stage also computes an independent reference transform from the full-scene SfM
+camera poses of each half, so the cloud-based estimate can be checked against
+something it never saw.
+
+*Rejected:* the spec's alternation (did not converge); rigid ICP after a scale fixed by
+RANSAC (leaves the coarse scale error, about 2–3 % on the synthetic case).
+
+### D-016 Segmentation parameters while the scene is non-metric
+**Date:** 2026-11-14 · **By:** claude-code
+
+`ortho_gsd_m` and the stone-area bounds are in metres and cannot be used until scale
+references exist. `segment.nonmetric` gives scene-unit equivalents, used whenever
+`transform.json` says `metric: false`: GSD 0.004 (about half the real point spacing, so
+the orthophoto is 3122 × 2455 px for `highwall`), stone area 0.008–4.0 units². The
+bounds were set from the reconstruction (stones read about 0.3–0.8 units wide). Holes
+in the orthophoto inside the covered area are inpainted after an 11 px closing.
+
+SAM 2 runs with 48 points per side and one extra crop layer on the orthophoto (small
+stones on a large image), and with 32 points per side, no crop layer on the 1600 px
+photos for `multiview`. The multi-view graph counts mask-pair intersections on a 20 %
+random subset of points; an edge needs IoU > 0.5 and at least 20 shared sampled points.
+A stone must appear as a mask in at least 2 images, and a point needs 2 agreeing votes
+and 40 % of the views that see it. The visibility test uses the MVS geometric depth
+maps with a 2 % relative tolerance.
+
+The orthophoto pixel grid depends only on `dense_wall.ply` and the GSD, so an
+annotation drawn on it stays valid if the segmentation parameters change, but not if
+`dense` or `frame` is rerun.
+
 ---
 
 <!-- Template
