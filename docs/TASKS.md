@@ -28,7 +28,7 @@ fails, try sequential matching and a lower blur rejection before anything else, 
 log what changed.
 
 ### M2 Dense cloud and splat
-- [ ] `splat` for both scenes, with held-out metrics.
+- [x] `splat` for both scenes, with held-out metrics.
 - [x] `dense` for `highwall`.
 - [x] `frame` for `highwall` (runs without scale refs, flagged non-metric).
 
