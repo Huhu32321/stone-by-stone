@@ -49,17 +49,18 @@ def _sfm_model(ctx: StageContext) -> Path:
     return ctx.stage_dir("sfm") / model_rel
 
 
-def _colmap_mvs(ctx: StageContext, dcfg: dict) -> Path:
-    colmap = find_tool("colmap", ctx.cfg)
-    ctx.tools = {"colmap": colmap_version(colmap)}
-    raw_dir = ctx.root / ctx.cfg["raw_dir"]
-    model = _sfm_model(ctx)
-    ws = ctx.out_dir / "mvs"
-    if ws.exists():  # stale run; start clean, inside out_dir only
+def colmap_mvs(
+    colmap: Path, image_dir: Path, model: Path, ws: Path, dcfg: dict, seed: int, log: Path
+) -> tuple[Path, int]:
+    """Undistort, PatchMatch (geometric consistency) and fuse; return (fused.ply, n depth maps).
+
+    ``ws`` is deleted and recreated; callers pass a folder inside their own stage output.
+    """
+    if ws.exists():
         shutil.rmtree(ws)
-    log = ctx.out_dir / "colmap.log"
     log.unlink(missing_ok=True)
-    seed = str(ctx.cfg["seed"])
+    seed = str(seed)
+    raw_dir = image_dir
 
     run_logged(
         [
@@ -121,6 +122,21 @@ def _colmap_mvs(ctx: StageContext, dcfg: dict) -> Path:
             str(dcfg["fusion_max_normal_error_deg"]),
         ],
         log,
+    )
+    return fused, n_depth
+
+
+def _colmap_mvs(ctx: StageContext, dcfg: dict) -> Path:
+    colmap = find_tool("colmap", ctx.cfg)
+    ctx.tools = {"colmap": colmap_version(colmap)}
+    fused, n_depth = colmap_mvs(
+        colmap,
+        ctx.root / ctx.cfg["raw_dir"],
+        _sfm_model(ctx),
+        ctx.out_dir / "mvs",
+        dcfg,
+        int(ctx.cfg["seed"]),
+        ctx.out_dir / "colmap.log",
     )
     ctx.metrics["n_depth_maps"] = n_depth
     return fused

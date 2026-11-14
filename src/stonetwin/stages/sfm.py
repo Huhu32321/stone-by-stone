@@ -31,7 +31,7 @@ def _read_manifest(ctx: StageContext) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def _largest_model(sparse_dir: Path) -> tuple[Path, pycolmap.Reconstruction, int]:
+def largest_model(sparse_dir: Path) -> tuple[Path, pycolmap.Reconstruction, int]:
     """Return (path, reconstruction, number of models) for the model with most images."""
     models = sorted(p for p in sparse_dir.iterdir() if p.is_dir())
     if not models:
@@ -84,6 +84,89 @@ def export_cameras(rec: pycolmap.Reconstruction, model_rel: str) -> dict:
     }
 
 
+def colmap_sfm(
+    colmap: Path,
+    image_dir: Path,
+    names: list[str],
+    work: Path,
+    scfg: dict,
+    seed: int,
+    log: Path,
+) -> Path:
+    """Run COLMAP extraction, matching and mapping on ``names`` read from ``image_dir``.
+
+    ``work`` is deleted and recreated (callers pass a folder inside their own stage
+    output). Images are read in place, never copied or modified.
+
+    Returns:
+        The ``sparse`` folder holding one sub-folder per model.
+    """
+    if work.exists():
+        shutil.rmtree(work)
+    sparse = work / "sparse"
+    sparse.mkdir(parents=True)
+    db = work / "database.db"
+    image_list = work / "image_list.txt"
+    image_list.write_text("\n".join(names) + "\n", encoding="utf-8")
+    log.unlink(missing_ok=True)
+    seed_s = str(seed)
+    matcher = scfg["matcher"]
+    if matcher not in ("exhaustive", "sequential"):
+        raise StageError(f"sfm.matcher must be exhaustive or sequential, got {matcher}")
+    run_logged(
+        [
+            colmap,
+            "feature_extractor",
+            "--database_path",
+            db,
+            "--image_path",
+            image_dir,
+            "--image_list_path",
+            image_list,
+            "--ImageReader.camera_model",
+            scfg["camera_model"],
+            "--ImageReader.single_camera",
+            str(int(scfg["single_camera"])),
+            "--SiftExtraction.max_num_features",
+            str(scfg["max_num_features"]),
+            "--default_random_seed",
+            seed_s,
+        ],
+        log,
+    )
+    run_logged(
+        [
+            colmap,
+            f"{matcher}_matcher",
+            "--database_path",
+            db,
+            "--TwoViewGeometry.random_seed",
+            seed_s,
+            "--default_random_seed",
+            seed_s,
+        ],
+        log,
+    )
+    run_logged(
+        [
+            colmap,
+            "mapper",
+            "--database_path",
+            db,
+            "--image_path",
+            image_dir,
+            "--output_path",
+            sparse,
+            "--Mapper.random_seed",
+            seed_s,
+            "--default_random_seed",
+            seed_s,
+        ],
+        log,
+    )
+    return sparse
+
+
 def run(ctx: StageContext) -> None:
     """Run COLMAP SfM on the usable images and export ``cameras.json``.
 
@@ -100,17 +183,7 @@ def run(ctx: StageContext) -> None:
         raise StageError(f"Only {len(used)} usable images in the manifest")
 
     work = ctx.out_dir / "colmap"
-    if work.exists():  # stale run (is_done() was false); start clean, inside out_dir only
-        shutil.rmtree(work)
-    sparse = work / "sparse"
-    sparse.mkdir(parents=True)
-    db = work / "database.db"
-    image_list = work / "image_list.txt"
-    image_list.write_text("\n".join(used) + "\n", encoding="utf-8")
     log = ctx.out_dir / "colmap.log"
-    log.unlink(missing_ok=True)
-
-    seed = str(ctx.cfg["seed"])
     matcher = scfg["matcher"]
     ctx.inputs = {"manifest": "00_ingest/manifest.csv", "n_images_used": len(used)}
     ctx.params = {
@@ -122,62 +195,9 @@ def run(ctx: StageContext) -> None:
         "accept": scfg["accept"],
     }
     ctx.tools = {"colmap": colmap_version(colmap), "pycolmap": pycolmap.__version__}
+    sparse = colmap_sfm(colmap, raw_dir, used, work, scfg, int(ctx.cfg["seed"]), log)
 
-    run_logged(
-        [
-            colmap,
-            "feature_extractor",
-            "--database_path",
-            db,
-            "--image_path",
-            raw_dir,
-            "--image_list_path",
-            image_list,
-            "--ImageReader.camera_model",
-            scfg["camera_model"],
-            "--ImageReader.single_camera",
-            str(int(scfg["single_camera"])),
-            "--SiftExtraction.max_num_features",
-            str(scfg["max_num_features"]),
-            "--default_random_seed",
-            seed,
-        ],
-        log,
-    )
-    if matcher not in ("exhaustive", "sequential"):
-        raise StageError(f"sfm.matcher must be exhaustive or sequential, got {matcher}")
-    run_logged(
-        [
-            colmap,
-            f"{matcher}_matcher",
-            "--database_path",
-            db,
-            "--TwoViewGeometry.random_seed",
-            seed,
-            "--default_random_seed",
-            seed,
-        ],
-        log,
-    )
-    run_logged(
-        [
-            colmap,
-            "mapper",
-            "--database_path",
-            db,
-            "--image_path",
-            raw_dir,
-            "--output_path",
-            sparse,
-            "--Mapper.random_seed",
-            seed,
-            "--default_random_seed",
-            seed,
-        ],
-        log,
-    )
-
-    model_dir, rec, n_models = _largest_model(sparse)
+    model_dir, rec, n_models = largest_model(sparse)
     model_rel = model_dir.relative_to(ctx.out_dir).as_posix()
     cams = export_cameras(rec, model_rel)
     (ctx.out_dir / "cameras.json").write_text(json.dumps(cams, indent=1), encoding="utf-8")
