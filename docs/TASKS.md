@@ -46,9 +46,9 @@ stones are geometrically visible in the cloud.
 ## Day 2 — analysis
 
 ### M3 Registration experiment
-- [ ] Split `highwall` images, reconstruct both halves independently.
-- [ ] Coarse and fine alignment; write `T_b_to_a.json` and metrics.
-- [ ] Unit test for the similarity estimator.
+- [x] Split `highwall` images, reconstruct both halves independently.
+- [x] Coarse and fine alignment; write `T_b_to_a.json` and metrics.
+- [x] Unit test for the similarity estimator.
 
 **Accept:** ICP converges; RMSE and cloud-to-cloud statistics are in `stage.json`. If
 a half fails to reconstruct with 21 images, switch the split to interleaved thirds
