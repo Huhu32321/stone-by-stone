@@ -29,8 +29,8 @@ log what changed.
 
 ### M2 Dense cloud and splat
 - [ ] `splat` for both scenes, with held-out metrics.
-- [ ] `dense` for `highwall`.
-- [ ] `frame` for `highwall` (runs without scale refs, flagged non-metric).
+- [x] `dense` for `highwall`.
+- [x] `frame` for `highwall` (runs without scale refs, flagged non-metric).
 
 **Accept:** held-out PSNR / SSIM / LPIPS written; `dense_wall.ply` opens and shows
 individual stones and joints when viewed up close.
