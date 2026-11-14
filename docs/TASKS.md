@@ -20,8 +20,8 @@ until Gate 2 is passed.
 **Accept:** `python -m stonetwin --help` lists all stages; `pytest` and `ruff check` run clean.
 
 ### M1 Ingest and SfM
-- [ ] `ingest` for both scenes; manifest and blur report written.
-- [ ] `sfm` for both scenes.
+- [x] `ingest` for both scenes; manifest and blur report written.
+- [x] `sfm` for both scenes.
 
 **Accept:** thresholds in `configs/default.yaml` under `sfm.accept`. If `highwall`
 fails, try sequential matching and a lower blur rejection before anything else, and

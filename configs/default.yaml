@@ -2,6 +2,11 @@
 # Every value here is a starting point: change it, then log why in docs/DECISIONS.md.
 seed: 0
 
+tools:                             # machine-local paths go in configs/local.yaml
+  colmap: null
+  lichtfeld: null
+  sam2_checkpoint: checkpoints/sam2.1_hiera_large.pt
+
 ingest:
   blur_metric: laplacian_variance
   blur_reject_percentile: 5        # flag the blurriest N% (flag, never delete)
@@ -11,6 +16,7 @@ sfm:
   camera_model: OPENCV
   single_camera: true              # one body, fixed 24 mm, fixed resolution
   matcher: exhaustive
+  max_num_features: 8192           # SIFT features per image (COLMAP default)
   accept:
     min_registered_fraction: 0.90
     max_mean_reproj_error_px: 1.0

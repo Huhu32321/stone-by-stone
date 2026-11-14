@@ -41,6 +41,14 @@ class StageNotImplementedError(StageError):
     """The stage is still a stub."""
 
 
+class AcceptanceError(StageError):
+    """The stage ran but its results fail an acceptance check.
+
+    ``run_stage`` still writes ``stage.json`` (status ``failed_acceptance``) so the
+    metrics are available for diagnosis, then re-raises.
+    """
+
+
 @dataclass
 class StageContext:
     """What a stage needs to run.
@@ -126,6 +134,10 @@ def run_stage(ctx: StageContext, fn: StageFn) -> bool:
     if ctx.is_done():
         return False
     started = time.perf_counter()
-    fn(ctx)
+    try:
+        fn(ctx)
+    except AcceptanceError:
+        ctx.write_stage_json(started, status="failed_acceptance")
+        raise
     ctx.write_stage_json(started)
     return True

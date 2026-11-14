@@ -109,6 +109,19 @@ checkpoints. It is installed with its optional CUDA post-processing extension di
 *Rejected:* SAM 3 (concept/text-prompted, gated weights, less suited to "every
 stone" mask generation); original SAM ViT-H (older, no advantage here).
 
+### D-011 Blur flagging by rank; capture order from EXIF time
+**Date:** 2026-11-14 · **By:** claude-code
+
+`blur_reject_percentile` is applied as a rank: the `round(n * p / 100)` images with the
+lowest Laplacian variance are flagged (2 of 42 for `highwall`, 8 of 155 for `entrance`
+at 5 %). A percentile threshold on the score would flag a varying number of images when
+scores tie. Capture order (used by the `odd_even` split in M3) is EXIF
+`DateTimeOriginal` with the file name as tie-break; the camera clock is wrong in
+absolute terms but consistent within a session.
+
+*Rejected:* a fixed absolute blur threshold (scenes differ by an order of magnitude in
+median score: about 320 vs 610).
+
 ---
 
 <!-- Template
