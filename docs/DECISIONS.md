@@ -122,6 +122,60 @@ absolute terms but consistent within a session.
 *Rejected:* a fixed absolute blur threshold (scenes differ by an order of magnitude in
 median score: about 320 vs 610).
 
+### D-012 Dense backend: COLMAP MVS at 1600 px, fusion with 3 agreeing views
+**Date:** 2026-11-14 · **By:** claude-code
+
+After the NVIDIA driver was updated to 621.24 (CUDA 13.5), `patch_match_stereo` runs on
+this GPU (it aborted under 591.66, see D-008). `dense.backend: auto` therefore resolves
+to `colmap_mvs`. A 1200 px probe on `highwall` took 12 min for 40 views and showed the
+wall, plaques and cavity clearly. The stage uses 1600 px (`dense.max_image_size`) as a
+compromise between joint detail and run time (full 2400 px would be roughly four times
+slower). `stereo_fusion` keeps points seen consistently in 3 views instead of COLMAP's
+default 5: on the probe this gave 54 % more points (1.33 M vs 0.86 M) and filled gaps at
+the wall edges, with no visible increase in noise on the wall face.
+
+`splat_depth_fusion` is not implemented, since the preferred backend now works. The
+stage fails with a clear message if it is selected. The MVS workspace is kept in
+`02_dense/mvs/` so the `multiview` method can reuse its depth maps for the visibility
+test.
+
+*Rejected:* full-resolution MVS (time); fusion default of 5 views (sparser at the
+edges of a 40-image capture).
+
+### D-013 Splat metrics computed from LichtFeld's held-out comparison images
+**Date:** 2026-11-14 · **By:** claude-code
+
+LichtFeld trains on a COLMAP-undistorted PINHOLE copy of the registered images
+(`splat.max_image_size: 1600`) with `--test-every 8`, `--resize_factor 1`, and writes
+ground-truth|render pairs for the held-out views at the last iteration. `stonetwin`
+splits those pairs and computes PSNR, SSIM (scikit-image) and LPIPS (VGG backbone, as
+in the original 3DGS evaluation) itself. On a 600-iteration smoke test our PSNR matched
+LichtFeld's own value to 4 decimals, SSIM differed by 0.003 (window implementation).
+
+Held-out images are identified by matching each ground-truth half against the dataset
+images, not by assuming an index pattern: on the smoke test LichtFeld held out images
+1, 10, 19, 28, 37 of the sorted list, not 0, 8, 16, … . `--max-cap 3000000` bounds
+VRAM.
+
+*Rejected:* writing a separate renderer (needs `gsplat` and a CUDA toolkit, D-009);
+trusting the trainer's metrics alone (definitions not documented, no LPIPS).
+
+### D-014 Wall frame ROI in scene units until scale arrives
+**Date:** 2026-11-14 · **By:** claude-code
+
+The `frame` ROI keeps points from `roi_band_back` behind to `roi_band_front` in front
+of the fitted plane, inside the convex hull of where the central 80 % of each image
+meets the plane. Without scale references these bands are in scene units, chosen from
+the `highwall` reconstruction (wall about 11 scene units wide, wall relief within
+±0.05, cavity to about −0.3): 0.4 behind, 0.15 in front. A first try with 1.0 / 0.5
+kept a wide strip of pavement; 0.15 still keeps a narrow one, plus a short piece of the
+return wall at the left end. They must be revisited
+in metres once `scale_refs.json` exists. RANSAC runs on a 300 k-point subsample and the
+plane is then refined by least squares over all inliers.
+
+Ruff's pep8-naming rules N802/N803 are ignored in addition to N806, because the
+project's frame-naming convention (`T_wall_from_world`, `apply_T`) requires capitals.
+
 ---
 
 <!-- Template
