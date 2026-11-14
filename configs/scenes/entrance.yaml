@@ -1,0 +1,8 @@
+# Showcase scene. Free-standing pointed arch: reconstruction is P0, segmentation is P2.
+scene: entrance
+role: showcase
+raw_dir: data/raw/entrance
+meta_dir: data/meta/entrance
+geometry: freeform
+segment:
+  methods: [multiview]             # no single wall plane, so no ortho baseline

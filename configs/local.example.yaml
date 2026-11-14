@@ -1,0 +1,6 @@
+# Copy to configs/local.yaml (git-ignored) and set paths for this machine.
+# Values here override default.yaml and the scene file.
+tools:
+  colmap: null            # path to colmap.exe / COLMAP.bat; or set STONETWIN_COLMAP
+  lichtfeld: null         # path to LichtFeld-Studio.exe; or set STONETWIN_LICHTFELD
+  sam2_checkpoint: checkpoints/sam2.1_hiera_large.pt

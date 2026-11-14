@@ -1,0 +1,50 @@
+# Defaults shared by all scenes. Scene files in configs/scenes/ override these.
+# Every value here is a starting point: change it, then log why in docs/DECISIONS.md.
+seed: 0
+
+ingest:
+  blur_metric: laplacian_variance
+  blur_reject_percentile: 5        # flag the blurriest N% (flag, never delete)
+  strip_exif_on_publish: true      # GPS + camera serial must not reach git
+
+sfm:
+  camera_model: OPENCV
+  single_camera: true              # one body, fixed 24 mm, fixed resolution
+  matcher: exhaustive
+  accept:
+    min_registered_fraction: 0.90
+    max_mean_reproj_error_px: 1.0
+
+dense:
+  backend: auto                    # colmap_mvs if CUDA build present, else splat_depth_fusion
+  voxel_downsample_m: 0.003        # applied only when the scene is metric
+
+splat:
+  backend: auto                    # decided in M0, see TECH_SPEC section 5
+  holdout_every: 8                 # every 8th image is test-only
+  iterations: 30000
+
+frame:
+  plane_ransac_threshold: 0.01     # in scene units before scaling
+  require_metric: false            # pipeline runs without scale refs, but flags it
+
+register:
+  split: odd_even                  # two independent reconstructions from disjoint images
+  coarse: fpfh_ransac
+  fine: icp_point_to_plane
+  estimate_scale: true
+
+segment:
+  methods: [ortho, multiview]      # ortho = guaranteed baseline, multiview = main method
+  ortho_gsd_m: 0.002               # orthophoto ground sampling distance
+  min_stone_area_m2: 0.002
+  max_stone_area_m2: 1.0
+  multiview_affinity_threshold: 0.5
+
+evaluate:
+  min_gt_stones: 30
+  iou_match_threshold: 0.5
+
+viewer:
+  max_points: 1500000
+  max_payload_mb: 30

@@ -1,0 +1,9 @@
+# Primary analysis scene (P0). Rubble masonry wall with visible damage.
+scene: highwall
+role: analysis
+raw_dir: data/raw/highwall
+meta_dir: data/meta/highwall
+annotations_dir: data/annotations/highwall
+geometry: planar
+segment:
+  methods: [ortho, multiview]

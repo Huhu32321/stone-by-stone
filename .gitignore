@@ -1,0 +1,43 @@
+# --- data: raw photos and all generated artefacts stay out of git ---
+data/raw/
+outputs/
+*.ply
+*.splat
+*.ksplat
+*.spz
+*.bin
+*.db
+!viewer/public/data/**
+
+# --- private notes (never publish) ---
+docs/internal/
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- machine-local config (tool paths) ---
+configs/local.yaml
+
+# --- model weights ---
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+
+# --- node / viewer ---
+node_modules/
+viewer/dist/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

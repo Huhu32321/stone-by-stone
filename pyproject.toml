@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stonetwin"
+version = "0.1.0"
+description = "Per-stone digital twin of a masonry wall from handheld photographs."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+  "scipy",
+  "open3d",
+  "opencv-python",
+  "scikit-image",
+  "shapely>=2.0",
+  "pillow",
+  "matplotlib",
+  "pandas",
+  "typer",
+  "pyyaml",
+  "pycolmap",
+  "torch",
+  "torchvision",
+  "lpips",
+  # SAM 2.1 is installed from its git repository; see environment.yml.
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+stonetwin = "stonetwin.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:dash"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "N"]
+ignore = ["N806"]  # allow math-style names such as T_wall_from_world, K, R
