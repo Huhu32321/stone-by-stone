@@ -12,7 +12,7 @@ variables or `configs/local.yaml` (git-ignored).
 | CPU | AMD Ryzen 9 8945HX |
 | RAM | 31 GB |
 | GPU | NVIDIA GeForce RTX 5070 Ti Laptop GPU, 12 GB, compute capability 12.0 (Blackwell) |
-| Driver | 591.66 (supports CUDA runtime up to 13.1) |
+| Driver | 621.24 (supports CUDA runtime up to 13.5); was 591.66 during M0 |
 | Disk | Project drive has ample space; system drive has about 21 GB free |
 
 Compute capability 12.0 needs CUDA 12.8 or later. Any PyTorch or CUDA binary built for
@@ -54,8 +54,8 @@ Paths are set in `configs/local.yaml` (git-ignored; template in
 
 | Tool | Version | Status on this machine |
 |---|---|---|
-| COLMAP | 4.2.1, official `windows-cuda` build | GPU SIFT extraction, exhaustive matching, mapping and undistortion work. **`patch_match_stereo` aborts** (exit 0xC0000409). |
-| LichtFeld Studio | v0.5.0-85-g4ad2d1a4 | headless training to be exercised in M2 |
+| COLMAP | 4.2.1, official `windows-cuda` build | SfM, undistortion and (since driver 621.24) `patch_match_stereo` + `stereo_fusion` work on the GPU. |
+| LichtFeld Studio | v0.5.0-85-g4ad2d1a4 | headless training with `--test-every`, `--eval --save-eval-images` works (600-iteration smoke test) |
 
 ### COLMAP MVS on this GPU
 
@@ -72,3 +72,11 @@ CUDA error at src/colmap/mvs/patch_match_cuda.cu:1683
 The PatchMatch kernel is shipped as PTX built with a newer CUDA toolkit than driver
 591.66 can JIT-compile. A newer NVIDIA driver would most likely fix it; until then the
 `dense` stage uses `splat_depth_fusion` (see D-008).
+
+**Resolved 2026-11-14 (M2):** after updating the driver to 621.24, a 1200 px
+`patch_match_stereo` run on all 40 `highwall` views completed in 12 minutes with
+geometric depth maps for every view. `dense.backend: auto` now resolves to
+`colmap_mvs` (D-012).
+
+LPIPS downloads the torchvision VGG-16 weights (528 MB) to the user's torch cache on
+first use.

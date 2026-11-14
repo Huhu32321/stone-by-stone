@@ -24,15 +24,27 @@ sfm:
 dense:
   backend: auto                    # colmap_mvs if CUDA build present, else splat_depth_fusion
   voxel_downsample_m: 0.003        # applied only when the scene is metric
+  max_image_size: 1600             # px, longest side for undistortion and PatchMatch (D-012)
+  fusion_min_num_pixels: 3         # stereo_fusion: views that must agree (COLMAP default 5)
+  fusion_max_reproj_error_px: 2.0  # COLMAP default
+  fusion_max_depth_error: 0.01     # relative; COLMAP default
+  fusion_max_normal_error_deg: 10  # COLMAP default
 
 splat:
   backend: auto                    # decided in M0, see TECH_SPEC section 5
   holdout_every: 8                 # every 8th image is test-only
-  iterations: 30000
+  iterations: 30000                # LichtFeld evaluates at 7000 and at the last step
+  max_image_size: 1600             # px, longest side of the undistorted training images
+  max_gaussians: 3000000           # --max-cap; keeps VRAM under 12 GB
+  lpips_net: vgg                   # LPIPS backbone, as in the original 3DGS evaluation
 
 frame:
   plane_ransac_threshold: 0.01     # in scene units before scaling
   require_metric: false            # pipeline runs without scale refs, but flags it
+  min_inlier_fraction: 0.3         # fail if the dominant plane explains less of the cloud
+  roi_band_front: 0.15             # scene units in front of the plane kept (relief, plaques)
+  roi_band_back: 0.4               # scene units behind the plane kept (cavity, recesses)
+  roi_image_fraction: 0.8          # central fraction of each image whose footprint bounds the ROI
 
 register:
   split: odd_even                  # two independent reconstructions from disjoint images

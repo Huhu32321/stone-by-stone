@@ -134,6 +134,7 @@ def run_stage(ctx: StageContext, fn: StageFn) -> bool:
     if ctx.is_done():
         return False
     started = time.perf_counter()
+    ctx.out_dir.mkdir(parents=True, exist_ok=True)
     try:
         fn(ctx)
     except AcceptanceError:
