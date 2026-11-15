@@ -13,14 +13,17 @@ valid as long as `dense` and `frame` are not rerun (D-016).
 [labelme](https://github.com/wkentaro/labelme), in its own environment so it does not
 touch `stonetwin`:
 
+Installed as a plain venv (no conda needed) at `D:\codingTools\venvs\labelme` (labelme 7.11).
+From the repo root:
+
 ```
-conda create -n labelme python=3.11 -y
-conda activate labelme
-pip install labelme
-labelme outputs/highwall/06_segment/ortho/ortho.png --output data/annotations/highwall/stones_gt.json --nodata
+D:\codingTools\venvs\labelme\Scripts\labelme.exe outputs/highwall/06_segment/ortho/ortho.png --output data/annotations/highwall --labels region,stone --validate-label exact
 ```
 
-`--nodata` keeps the image out of the JSON (it would otherwise embed the picture).
+labelme 7.x: `--output` is a folder and the file is named after the image (`ortho.json`);
+image data is left out by default (the old `--nodata` flag no longer exists). When done,
+rename `ortho.json` to `stones_gt.json`. Autosave is on, so reopening with the same
+command resumes where you left off (rename only after you finish).
 
 ## What to draw
 
@@ -33,5 +36,5 @@ labelme outputs/highwall/06_segment/ortho/ortho.png --output data/annotations/hi
 3. A stone cut by the region boundary: draw the whole stone anyway.
 4. Leave mortar, patches, holes and non-stone objects unlabelled.
 
-Save (Ctrl+S) to `data/annotations/highwall/stones_gt.json`. This file is committed;
+Save (Ctrl+S), then rename the resulting `ortho.json` to `data/annotations/highwall/stones_gt.json`. This file is committed;
 it holds polygons only, no image data.
