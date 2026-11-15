@@ -7,9 +7,10 @@ import pytest
 
 from stonetwin.stages.evaluate import (
     derive_region,
+    map_shapes,
     match,
     rasterize_gt,
-    regrid_shape,
+    register_images,
     restrict,
 )
 
@@ -61,9 +62,27 @@ def test_restrict_and_derived_region() -> None:
     assert out.max() == 1 and (out == 1).sum() == 100
 
 
-def test_regrid_shape_through_wall_coordinates() -> None:
-    src = {"x0": -1.0, "y0": 2.0, "gsd": 0.01}
-    dst = {"x0": -1.02, "y0": 2.03, "gsd": 0.02}
-    sh = regrid_shape({"label": "stone", "points": [[0, 0], [100, 50]]}, src, dst)
-    # wall (-1.0, 2.0) -> dst px (1, 1.5); wall (0.0, 1.5) -> dst px (51, 26.5)
-    assert np.allclose(sh["points"], [[1.0, 1.5], [51.0, 26.5]])
+def test_register_images_recovers_similarity_and_maps_shapes() -> None:
+    import cv2
+
+    rng = np.random.default_rng(0)
+    # Textured reference: random blobs, so SIFT has something to match.
+    ref = np.zeros((400, 500, 3), np.uint8)
+    for _ in range(300):
+        c = tuple(int(v) for v in rng.integers(0, 256, 3))
+        cv2.circle(
+            ref,
+            (int(rng.integers(0, 500)), int(rng.integers(0, 400))),
+            int(rng.integers(3, 15)),
+            c,
+            -1,
+        )
+    A_true = cv2.getRotationMatrix2D((250, 200), 2.0, 1.03)
+    A_true[:, 2] += (7.5, -4.0)
+    cur = cv2.warpAffine(ref, A_true, (520, 420))
+    A, q = register_images(ref, cur)
+    assert q["n_inliers"] >= 50 and q["rms_px"] < 1.0
+    pts = np.array([[100.0, 80.0], [400.0, 300.0]])
+    expect = pts @ A_true[:, :2].T + A_true[:, 2]
+    sh = map_shapes([{"label": "stone", "points": pts.tolist()}], A, 1.0, 1.0)
+    assert np.allclose(sh[0]["points"], expect, atol=0.5)

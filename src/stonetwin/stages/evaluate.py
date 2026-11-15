@@ -1,7 +1,8 @@
 """Stage ``evaluate``: segmentation against hand-drawn ground truth (TECH_SPEC 4.8).
 
 Ground truth: labelme polygons on the orthophoto, ``<annotations_dir>/stones_gt.json``,
-in orthophoto pixel coordinates (``06_segment/ortho/ortho_meta.json``). Polygons
+in pixel coordinates of the orthophoto they were drawn on (a copy is kept as
+``ortho_ref.jpg`` and registered to the current orthophoto, D-019). Polygons
 labelled ``stone`` are stones; a polygon labelled ``region`` bounds the evaluation. With
 no ``region`` polygon, the region is the union of the stones closed by a disc of
 ``region_close_px`` (D-017), so mortar between drawn stones is inside but large undrawn
@@ -33,16 +34,52 @@ from stonetwin.stage import AcceptanceError, StageContext, StageError
 from stonetwin.stages.segment import points_to_ortho_labels
 
 
-def regrid_shape(shape: dict, src: dict, dst: dict) -> dict:
-    """Map a labelme shape from orthophoto grid ``src`` to grid ``dst`` (both ortho_meta).
+def register_images(
+    ref: np.ndarray, cur: np.ndarray, ratio: float = 0.75, ransac_px: float = 3.0
+) -> tuple[np.ndarray, dict[str, float]]:
+    """Similarity mapping pixel coordinates of ``ref`` to ``cur`` (both RGB uint8).
 
-    Pixel coordinates (x right, y down) -> wall (x, y) -> pixel coordinates on ``dst``.
+    SIFT features, Lowe ratio test, RANSAC on a 4-DoF similarity
+    (``cv2.estimateAffinePartial2D``).
+
+    Returns:
+        (2x3 matrix A with ``[x', y'] = A @ [x, y, 1]``, quality: n_matches, n_inliers,
+        rms residual of inliers in ``cur`` pixels, scale).
     """
-    pts = np.asarray(shape["points"], float)
-    wx = src["x0"] + pts[:, 0] * src["gsd"]
-    wy = src["y0"] - pts[:, 1] * src["gsd"]
-    out = np.c_[(wx - dst["x0"]) / dst["gsd"], (dst["y0"] - wy) / dst["gsd"]]
-    return {**shape, "points": out.tolist()}
+    sift = cv2.SIFT_create(nfeatures=20000)
+    g = [cv2.cvtColor(im, cv2.COLOR_RGB2GRAY) for im in (ref, cur)]
+    (k1, d1), (k2, d2) = (sift.detectAndCompute(x, None) for x in g)
+    if d1 is None or d2 is None:
+        raise StageError("no features found to register the annotation image")
+    knn = cv2.BFMatcher(cv2.NORM_L2).knnMatch(d1, d2, k=2)
+    good = [m for m, n in (x for x in knn if len(x) == 2) if m.distance < ratio * n.distance]
+    if len(good) < 10:
+        raise StageError(f"only {len(good)} feature matches between annotation and orthophoto")
+    src = np.float32([k1[m.queryIdx].pt for m in good])
+    dst = np.float32([k2[m.trainIdx].pt for m in good])
+    A, inl = cv2.estimateAffinePartial2D(
+        src, dst, method=cv2.RANSAC, ransacReprojThreshold=ransac_px, maxIters=10000
+    )
+    if A is None:
+        raise StageError("could not register the annotation image to the orthophoto")
+    inl = inl.ravel().astype(bool)
+    res = (src[inl] @ A[:, :2].T + A[:, 2]) - dst[inl]
+    return A, {
+        "n_matches": len(good),
+        "n_inliers": int(inl.sum()),
+        "rms_px": float(np.sqrt((res**2).sum(1).mean())),
+        "scale": float(np.hypot(A[0, 0], A[1, 0])),
+    }
+
+
+def map_shapes(shapes: list[dict], A: np.ndarray, pre: float, post: float) -> list[dict]:
+    """Map shapes: ``p_out = post * (A @ [p_in * pre, 1])``."""
+    out = []
+    for sh in shapes:
+        q = np.asarray(sh["points"], float) * pre
+        q = (q @ A[:, :2].T + A[:, 2]) * post
+        out.append({**sh, "points": q.tolist()})
+    return out
 
 
 def rasterize_gt(shapes: list[dict], hw: tuple[int, int]) -> tuple[np.ndarray, np.ndarray | None]:
@@ -175,16 +212,32 @@ def run(ctx: StageContext) -> None:
     meta = json.loads((seg / "ortho" / "ortho_meta.json").read_text(encoding="utf-8"))
     ann = json.loads(gt_path.read_text(encoding="utf-8"))
     hw = (meta["height"], meta["width"])
-    ann_meta_path = gt_path.parent / "ortho_meta.json"
-    if ann_meta_path.is_file():
-        # Polygons were drawn on the grid in ann_meta; map them through wall coordinates
-        # onto the current grid, so a rerun of dense/frame does not invalidate them.
-        am = json.loads(ann_meta_path.read_text(encoding="utf-8"))
-        ann["shapes"] = [regrid_shape(sh, am, meta) for sh in ann["shapes"]]
+    ref_path = gt_path.parent / "ortho_ref.jpg"
+    reg_info: dict[str, Any] = {"method": "none (same grid)"}
+    if ref_path.is_file():
+        # The polygons were drawn on the orthophoto of an earlier run; without metric scale
+        # every SfM run has its own gauge, so the grid moves. Register the current
+        # orthophoto to a copy of the annotated one and map the polygons (D-019).
+        ref = np.asarray(Image.open(ref_path).convert("RGB"))
+        cur = np.asarray(Image.open(seg / "ortho" / "ortho.png").convert("RGB"))
+        k = ref.shape[1] / cur.shape[1]  # register at the reference's resolution
+        cur_s = cv2.resize(
+            cur, (ref.shape[1], round(cur.shape[0] * k)), interpolation=cv2.INTER_AREA
+        )
+        A, q = register_images(ref, cur_s)
+        pre = ref.shape[1] / ann["imageWidth"]
+        ann["shapes"] = map_shapes(ann["shapes"], A, pre, 1.0 / k)
+        reg_info = {
+            "method": "SIFT + RANSAC similarity to ortho_ref.jpg",
+            **q,
+            "rms_px_full_res": q["rms_px"] / k,
+        }
+        if q["n_inliers"] < ecfg["min_registration_inliers"]:
+            raise AcceptanceError(f"annotation registration has only {q['n_inliers']} inliers")
     elif (ann.get("imageHeight"), ann.get("imageWidth")) != hw:
         raise StageError(
-            "annotation image size differs from the orthophoto and no ortho_meta.json "
-            "records the grid it was drawn on"
+            "annotation image size differs from the orthophoto and there is no "
+            "ortho_ref.jpg to register against"
         )
     gt, region = rasterize_gt(ann["shapes"], hw)
     region_source = "polygon"
@@ -204,6 +257,7 @@ def run(ctx: StageContext) -> None:
     (ctx.out_dir / "overlays").mkdir(parents=True, exist_ok=True)
     thr, cover = ecfg["iou_match_threshold"], ecfg["cover_frac"]
     ctx.metrics = {
+        "annotation_registration": reg_info,
         "region": region_source,
         "region_area_px": int(region.sum()),
         "n_gt_in_region": int(len(np.unique(gt)) - 1),

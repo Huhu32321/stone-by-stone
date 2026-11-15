@@ -5,8 +5,9 @@ Needed for M7 (`evaluate`). One file: `stones_gt.json` in this folder, labelme f
 ## Image to annotate
 
 `outputs/highwall/06_segment/ortho/ortho.png` (3122 × 2455 px, wall frame, viewed from
-the front). Its pixel geometry is in `ortho_meta.json` next to it. The annotation stays
-valid as long as `dense` and `frame` are not rerun (D-016).
+the front). A copy of the orthophoto as annotated is kept here as `ortho_ref.jpg`;
+`evaluate` registers each new orthophoto to it, so the annotation survives a
+full rerun (D-019).
 
 ## Tool
 
