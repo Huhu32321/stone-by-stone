@@ -50,8 +50,10 @@ To make the next capture comparable and metric:
 
 ## Privacy and publishing
 
-- Raw images carry GPS coordinates and camera metadata in EXIF. They are excluded from
-  git by `.gitignore`.
+- Raw images carry the camera body serial number and other camera metadata in EXIF.
+  No GPS coordinates were found in EXIF or XMP of any of the 197 files (checked
+  2026-11-15 with `scripts/privacy_check.py`); treat them as private regardless.
+  They are excluded from git by `.gitignore`.
 - Any image copied into `docs/` or `viewer/` must have EXIF stripped and must not show
   an identifiable person.
 - If a sample of the raw data is published, publish an EXIF-stripped copy as a release
