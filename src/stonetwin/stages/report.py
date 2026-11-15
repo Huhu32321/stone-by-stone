@@ -238,6 +238,15 @@ def results_md(all_m: dict[str, dict], figs: dict[str, str]) -> str:
                 f"by hand on the orthophoto; evaluation region {e['region']}.",
                 "",
             ]
+            ar = e.get("annotation_registration") or {}
+            if "n_inliers" in ar:
+                L += [
+                    "The annotation was drawn on the orthophoto of an earlier run; it is "
+                    "registered to this run's orthophoto by SIFT + RANSAC similarity "
+                    f"({f(ar['n_inliers'])} inlier matches, residual "
+                    f"{f(ar['rms_px_full_res'], 2)} px RMS, scale {f(ar['scale'], 4)}).",
+                    "",
+                ]
         if "eval" in figs:
             L += [
                 f"![evaluation overlay]({figs['eval']})",
