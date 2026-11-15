@@ -55,8 +55,8 @@ a half fails to reconstruct with 21 images, switch the split to interleaved thir
 (two thirds against one third, overlapping coverage) and log it.
 
 ### M4 Segmentation
-- [ ] `ortho` method end to end. Produce the orthophoto first and hand it to the author for annotation.
-- [ ] `multiview` method end to end with debug overlays.
+- [x] `ortho` method end to end. Produce the orthophoto first and hand it to the author for annotation.
+- [x] `multiview` method end to end with debug overlays.
 
 **Accept:** both methods write `points_labels.npy` under the same contract; overlays
 exist; stone count is plausible against a manual count of one region.
