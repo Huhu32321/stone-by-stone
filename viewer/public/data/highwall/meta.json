@@ -1,0 +1,20 @@
+{
+ "scene": "highwall",
+ "n_points": 1500000,
+ "bbox_min": [
+  -6.931119577096824,
+  -4.469169047471092,
+  -0.3999824155842435
+ ],
+ "bbox_max": [
+  5.55351796637043,
+  5.346931803111259,
+  0.1499971148496173
+ ],
+ "units": "scene",
+ "metric": false,
+ "frame": "wall (x along wall, y up, z out of wall)",
+ "method": "multiview",
+ "layout": "u16 xyz | u8 rgb | u16 id",
+ "outline_gsd": 0.004
+}
