@@ -146,6 +146,6 @@ review gates where work stops until the author signs off:
 
 - [ ] Measure at least two reference distances on `highwall` (for example plaque width,
       railing bar spacing) and fill `data/meta/highwall/scale_refs.json`.
-- [ ] Confirm the site names and write them into `docs/DATA.md`.
+- [x] Confirm the site names and write them into `docs/DATA.md`.
 - [ ] Annotate at least 30 stones on the orthophoto once M4 produces it.
 - [ ] Decide the public repository name (suggested: `stone-by-stone`).

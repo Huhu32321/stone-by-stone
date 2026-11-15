@@ -45,8 +45,8 @@ Full tables and figures: [`docs/RESULTS.md`](docs/RESULTS.md).
 
 | Scene | Subject | Images | Used for |
 |---|---|---|---|
-| `highwall` | Rubble masonry wall with repairs and an open cavity | 42 | Full pipeline and evaluation |
-| `entrance` | Free-standing pointed stone arch | 155 | Reconstruction showcase |
+| `highwall` | St George's Hill Street church: rubble masonry wall with repairs and an open cavity | 42 | Full pipeline and evaluation |
+| `entrance` | St. Audoen's Park: free-standing pointed stone arch (gate) | 155 | Reconstruction showcase |
 
 Both were captured in Dublin with a Canon EOS R8 at 24 mm. See the
 [dataset card](docs/DATA.md) for capture conditions and known problems.
@@ -89,12 +89,32 @@ recording parameters, tool versions and metrics.
 
 ## Limitations
 
-- Image-only capture: no laser scanning and no surveyed control. Scale comes from
-  tape-measured reference distances.
-- The registration experiment splits one capture session in two. It tests the
-  estimator, not change over time.
-- One wall, one annotator, a few dozen ground-truth stones.
-- The segmentation model is used as released, with no fine-tuning on masonry.
+- **Image-only capture.** No laser scanning and no surveyed control. Scale is meant to
+  come from tape-measured reference distances, which have not been entered yet: until
+  then every length and area is in arbitrary scene units. Counts, IoU, F1 and ratios
+  are unaffected.
+- **Independent reconstructions bend differently.** The residual between the two
+  half-reconstructions is a smooth bowl, not noise: each half calibrated its own lens
+  distortion, which a near-parallel capture constrains poorly. A similarity transform
+  cannot absorb it. A laser scan, a fixed calibration or oblique and convergent frames
+  would.
+- **The registration experiment is an easy case.** It splits one capture session in
+  two, so it tests the estimator, not change over time, and both halves came out in
+  similar gauges, so the estimator was not stressed by a large rotation or scale change.
+- **Segmentation over-splits and is class-agnostic.** The multi-view method splits
+  two-tone stones, and the segmentation model (used as released, with no fine-tuning
+  on masonry) also labels plaques and the door as stones. No exclusion mask is applied.
+- **Recession is relative to the neighbours.** With a neighbourhood larger than the
+  cavity, cavity stones read as set back, but stones framing the opening read as proud.
+  The proxy measures relief, not damage.
+- **Runs are not bit-reproducible, and there is no fixed gauge yet.** GPU stereo varies
+  slightly between runs and, without scale references, each run has its own scale and
+  origin, so stone counts change a little. The ground truth is re-registered to each
+  run's orthophoto by image features, and the residual is reported.
+- **One wall, one annotator.** The ground truth covers the whole `highwall` face but was
+  drawn by one person, with no second annotation to measure agreement.
+- **Not done:** the splat layer in the viewer, stone segmentation on `entrance`, and a
+  second-epoch capture for a true change comparison.
 
 ## Repository layout
 

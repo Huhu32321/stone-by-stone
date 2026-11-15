@@ -8,7 +8,7 @@ measurable from the files is marked **to confirm**.
 | | `highwall` | `entrance` |
 |---|---|---|
 | Subject | Rubble masonry wall with a plaque, a patched area and an open cavity exposing loose stone | Free-standing pointed stone arch with iron railings, on cobbled paving |
-| Site | **to confirm** | **to confirm** |
+| Site | St George's Hill Street church (Little St George's), Dublin | Gate of St. Audoen's Park, Dublin |
 | Images | 42 | 155 |
 | Camera | Canon EOS R8 | Canon EOS R8 |
 | Lens | RF 24-105mm F4-7.1 IS STM at 24 mm | same, at 24 mm |
