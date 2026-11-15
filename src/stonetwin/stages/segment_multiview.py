@@ -116,6 +116,49 @@ def _overlay(
     return np.concatenate([left, np.full((img.shape[0], 8, 3), 255, np.uint8), right], 1)
 
 
+def _merge_counts(
+    codes: np.ndarray, counts: np.ndarray, new_codes: np.ndarray, new_counts: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    allc = np.concatenate([codes, new_codes])
+    u, inv = np.unique(allc, return_inverse=True)
+    return u, np.bincount(inv, weights=np.concatenate([counts, new_counts])).astype(np.int64)
+
+
+def pair_counts(
+    nodes_sorted: np.ndarray, starts: np.ndarray, n_nodes: int, batch: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Count, for every unordered node pair (a < b), the groups containing both.
+
+    ``nodes_sorted[starts[k]:starts[k+1]]`` is group k (the masks that see one point).
+    Pairs are encoded as ``a * n_nodes + b`` and merged in batches of about ``batch``
+    pairs, so memory stays bounded however many masks see a point.
+
+    Returns:
+        (sorted pair codes, counts).
+    """
+    codes = np.zeros(0, np.int64)
+    counts = np.zeros(0, np.int64)
+    buf: list[np.ndarray] = []
+    n_buf = 0
+    for k in range(len(starts) - 1):
+        nodes = nodes_sorted[starts[k] : starts[k + 1]].astype(np.int64)
+        if len(nodes) < 2:
+            continue
+        a, b = np.triu_indices(len(nodes), 1)
+        lo, hi = np.minimum(nodes[a], nodes[b]), np.maximum(nodes[a], nodes[b])
+        keep = lo != hi
+        buf.append(lo[keep] * n_nodes + hi[keep])
+        n_buf += int(keep.sum())
+        if n_buf >= batch:
+            u, c = np.unique(np.concatenate(buf), return_counts=True)
+            codes, counts = _merge_counts(codes, counts, u, c)
+            buf, n_buf = [], 0
+    if buf:
+        u, c = np.unique(np.concatenate(buf), return_counts=True)
+        codes, counts = _merge_counts(codes, counts, u, c)
+    return codes, counts
+
+
 def run_multiview(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) -> dict:
     """Multi-view method. Writes ``06_segment/multiview/``; returns metrics."""
     from stonetwin.sam import generate, load_generator
@@ -152,8 +195,10 @@ def run_multiview(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: di
         recs = generate(gen, img)
         t_sam += time.perf_counter() - t0
         area_img = img.shape[0] * img.shape[1]
+        masks = [r.pop("segmentation") for r in recs]
+        del recs
         lab, _ = resolve_masks(
-            [r["segmentation"] for r in recs],
+            masks,
             np.ones(img.shape[:2], bool),
             mv["min_mask_px"],
             mv["max_mask_frac"] * area_img,
@@ -194,24 +239,10 @@ def run_multiview(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: di
     order = np.argsort(sp, kind="stable")
     sp, sn = sp[order], sn[order]
     starts = np.r_[0, np.nonzero(np.diff(sp))[0] + 1, len(sp)]
-    rows, cols = [], []
-    for k in range(len(starts) - 1):
-        nodes = sn[starts[k] : starts[k + 1]]
-        if len(nodes) < 2:
-            continue
-        a, b = np.meshgrid(nodes, nodes, indexing="ij")
-        u = a < b
-        rows.append(a[u])
-        cols.append(b[u])
-    rows = np.concatenate(rows)
-    cols = np.concatenate(cols)
-    inter = coo_matrix(
-        (np.ones(len(rows), np.int32), (rows, cols)), shape=(n_nodes, n_nodes)
-    ).tocsr()
-    inter.sum_duplicates()
+    codes, counts = pair_counts(sn, starts, n_nodes, mv["pair_batch"])
     size = np.bincount(sn, minlength=n_nodes).astype(float)
-    ii, jj = inter.nonzero()
-    vals = np.asarray(inter[ii, jj]).ravel().astype(float)
+    ii, jj = codes // n_nodes, codes % n_nodes
+    vals = counts.astype(float)
     iou = vals / (size[ii] + size[jj] - vals)
     edge = (iou > seg["multiview_affinity_threshold"]) & (vals >= mv["min_edge_points"])
     edge &= node_view_arr[ii] != node_view_arr[jj]

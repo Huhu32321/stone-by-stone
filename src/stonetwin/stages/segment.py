@@ -106,10 +106,14 @@ def resolve_masks(
     3. Each pixel goes to the smallest mask containing it.
     4. Drop labels left smaller than ``min_area_px``; renumber 1..N.
 
+    ``masks`` are modified in place (restricted to ``valid``).
+
     Returns:
         (int32 label image, counts per step).
     """
-    ms = [m & valid for m in masks]
+    for m in masks:  # in place: the full-size masks are large, avoid a second copy
+        np.logical_and(m, valid, out=m)
+    ms = masks
     areas = np.array([m.sum() for m in ms])
     keep = [i for i in np.argsort(areas) if min_area_px <= areas[i] <= max_area_px]
     counts = {"raw": len(masks), "area_ok": len(keep)}
@@ -233,8 +237,10 @@ def run_ortho(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) 
     records = generate(gen, img)
     t_sam = time.perf_counter() - t0
     px_area = sp["gsd"] ** 2
+    masks = [r.pop("segmentation") for r in records]
+    del records
     label, counts = resolve_masks(
-        [r["segmentation"] for r in records],
+        masks,
         cover,
         sp["min_area"] / px_area,
         sp["max_area"] / px_area,

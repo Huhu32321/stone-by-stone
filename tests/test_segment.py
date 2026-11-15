@@ -50,3 +50,20 @@ def test_resolve_masks_finer_level_wins_and_area_filter() -> None:
     assert label[60, 35] == label[60, 45] != label[60, 15]
     assert label[20, 20] != label[20, 50] and label[20, 20] > 0
     assert label[2, 2] == 0
+
+
+def test_pair_counts_matches_naive_for_any_batch_size() -> None:
+    from collections import Counter
+    from itertools import combinations
+
+    from stonetwin.stages.segment_multiview import pair_counts
+
+    rng = np.random.default_rng(0)
+    groups = [np.sort(rng.choice(30, rng.integers(1, 9), replace=False)) for _ in range(400)]
+    naive = Counter(p for g in groups for p in combinations(g.tolist(), 2))
+    nodes = np.concatenate(groups)
+    starts = np.r_[0, np.cumsum([len(g) for g in groups])]
+    for batch in (1, 7, 10**9):
+        codes, counts = pair_counts(nodes, starts, 30, batch)
+        got = {(int(c // 30), int(c % 30)): int(n) for c, n in zip(codes, counts, strict=True)}
+        assert got == dict(naive)

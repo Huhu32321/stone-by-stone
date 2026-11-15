@@ -81,6 +81,7 @@ segment:
     min_mask_px: 400               # per-image masks smaller than this are ignored
     max_mask_frac: 0.15            # ... and masks larger than this fraction of the image
     graph_point_fraction: 0.2      # points sampled to count mask-pair intersections
+    pair_batch: 5000000            # mask pairs merged per batch (bounds memory)
     min_edge_points: 20            # sampled shared points needed for an edge
     min_cluster_masks: 2           # a stone must be seen as a mask in >= 2 images
     min_votes: 2                   # a point needs >= 2 agreeing observations
