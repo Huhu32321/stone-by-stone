@@ -7,9 +7,8 @@ goes one step further and asks which stone is which: it reconstructs a real rubb
 masonry wall, segments it into individual stones in 3D, measures each one, and puts
 the result in a web viewer where every stone can be clicked.
 
-> **Status: in development.** The pipeline is specified and the data is captured.
-> Results below are filled in by the pipeline when it runs; nothing here is typed by
-> hand.
+> **Status: complete for `highwall`.** Results below are written by the pipeline
+> (`python -m stonetwin report`); nothing here is typed by hand.
 
 <!-- Add after first results: docs/figures/teaser.png and the live viewer link -->
 
@@ -18,7 +17,7 @@ the result in a web viewer where every stone can be clicked.
 | Stage | Method | Output |
 |---|---|---|
 | Reconstruct | Structure-from-Motion, dense point cloud, 3D Gaussian Splatting | Camera poses, point cloud, splat |
-| Frame | RANSAC wall-plane fit, scale from measured reference distances | Metric wall coordinate frame |
+| Frame | RANSAC wall-plane fit, gravity from the cameras' up direction | Wall coordinate frame (relative units) |
 | Register | Two independent reconstructions from disjoint image subsets, aligned by a 7-DoF similarity transform (feature-based coarse step, then ICP) | Transform and residual |
 | Parse | Foundation-model masks lifted to 3D by multi-view voting, compared with a 2.5D orthophoto baseline | A stone ID for every point |
 | Describe | Per-stone geometry and colour statistics | `stones.json` |
@@ -36,7 +35,7 @@ the result in a web viewer where every stone can be clicked.
 | Half-to-half registration: scale error vs. camera reference | 0.99 % |
 | Open cavity stones set back (recession < 0) | 1.00 |
 
-_Lengths are not yet metric (no scale references); unitless results are unaffected._
+_Lengths are relative (scene units; the capture has no scale reference). Unitless results are unaffected._
 <!-- RESULTS:END -->
 
 Full tables and figures: [`docs/RESULTS.md`](docs/RESULTS.md).
@@ -89,10 +88,9 @@ recording parameters, tool versions and metrics.
 
 ## Limitations
 
-- **Image-only capture.** No laser scanning and no surveyed control. Scale is meant to
-  come from tape-measured reference distances, which have not been entered yet: until
-  then every length and area is in arbitrary scene units. Counts, IoU, F1 and ratios
-  are unaffected.
+- **Image-only capture, relative scale.** No laser scanning, no surveyed control and no
+  scale reference in the scene, so every length and area is in relative scene units.
+  Counts, IoU, F1 and ratios are unaffected.
 - **Independent reconstructions bend differently.** The residual between the two
   half-reconstructions is a smooth bowl, not noise: each half calibrated its own lens
   distortion, which a near-parallel capture constrains poorly. A similarity transform
@@ -107,10 +105,11 @@ recording parameters, tool versions and metrics.
 - **Recession is relative to the neighbours.** With a neighbourhood larger than the
   cavity, cavity stones read as set back, but stones framing the opening read as proud.
   The proxy measures relief, not damage.
-- **Runs are not bit-reproducible, and there is no fixed gauge yet.** GPU stereo varies
-  slightly between runs and, without scale references, each run has its own scale and
-  origin, so stone counts change a little. The ground truth is re-registered to each
-  run's orthophoto by image features, and the residual is reported.
+- **Runs are not bit-reproducible, and there is no fixed gauge.** GPU stereo varies
+  slightly between runs and, because the scene has no absolute scale, each run has its
+  own scale and origin, so stone counts change a little. The ground truth is
+  re-registered to each run's orthophoto by image features, and the residual is
+  reported.
 - **One wall, one annotator.** The ground truth covers the whole `highwall` face but was
   drawn by one person, with no second annotation to measure agreement.
 - **Not done:** the splat layer in the viewer, stone segmentation on `entrance`, and a
@@ -120,7 +119,7 @@ recording parameters, tool versions and metrics.
 
 ```
 configs/        pipeline defaults and per-scene overrides
-data/           measurements and annotations (raw photos are not in git)
+data/           ground-truth annotations (raw photos are not in git)
 docs/           requirements, technical spec, dataset card, decisions, results
 src/stonetwin/  pipeline stages
 tests/          unit tests for geometry and metrics

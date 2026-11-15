@@ -30,7 +30,7 @@ log what changed.
 ### M2 Dense cloud and splat
 - [x] `splat` for both scenes, with held-out metrics.
 - [x] `dense` for `highwall`.
-- [x] `frame` for `highwall` (runs without scale refs, flagged non-metric).
+- [x] `frame` for `highwall` (relative units, flagged non-metric).
 
 **Accept:** held-out PSNR / SSIM / LPIPS written; `dense_wall.ply` opens and shows
 individual stones and joints when viewed up close.
@@ -111,8 +111,7 @@ README.
 
 ## Waiting on the author
 
-| Item | Needed by | File |
-|---|---|---|
-| Two measured reference distances | M5 (attributes in mm) | `data/meta/highwall/scale_refs.json` |
-| ≥ 30 annotated stones | M7 | `data/annotations/highwall/stones_gt.json` |
-| Site names | Gate 3 | `docs/DATA.md` |
+| Item | Needed by | File | Status |
+|---|---|---|---|
+| ≥ 30 annotated stones | M7 | `data/annotations/highwall/stones_gt.json` | delivered |
+| Site names | Gate 3 | `docs/DATA.md` | delivered |

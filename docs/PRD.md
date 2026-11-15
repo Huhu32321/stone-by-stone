@@ -73,7 +73,7 @@ Priority: **P0** must ship, **P1** should ship, **P2** only if time remains.
 | F3 | Produce a dense point cloud for `highwall`. | P0 |
 | F4 | Train a 3D Gaussian Splatting model per scene with a held-out test split. | P0 |
 | F5 | Define a wall coordinate frame (along-wall, up, outward) by plane fitting. | P0 |
-| F6 | Recover metric scale from user-measured reference distances when provided; run and flag `metric: false` when not. | P0 |
+| F6 | Run in relative units and flag `metric: false` throughout (no scale reference in the capture; D-020). | P0 |
 | F7 | Register two independent reconstructions built from disjoint image subsets (similarity transform: coarse then ICP) and report RMSE. | P0 |
 | F8 | Segment stones with the orthophoto baseline (2.5D). | P0 |
 | F9 | Segment stones by lifting per-image masks to 3D with multi-view voting. | P0 |
@@ -108,7 +108,7 @@ what gets reported, including results below target.
 | Images registered by SfM | both | ≥ 90 % |
 | Mean reprojection error | both | < 1.0 px |
 | Held-out PSNR / SSIM / LPIPS | both | reported |
-| Registration RMSE after ICP | highwall | reported, in mm if metric |
+| Registration RMSE after ICP | highwall | reported, in relative units |
 | Stone segmentation mean IoU (matched) | highwall | ≥ 0.60 |
 | Stone detection F1 at IoU 0.5 | highwall | ≥ 0.70 |
 | Multi-view method vs orthophoto baseline | highwall | both reported side by side |
@@ -137,15 +137,13 @@ review gates where work stops until the author signs off:
 |---|---|---|
 | 42 images are too few for a clean dense cloud of `highwall` | Medium | Check at Gate 1. Fall back to depth fusion from the splat; if still poor, recapture. |
 | `highwall` was shot at ISO 1000–5000; noise weakens matching and colour attributes | Medium | Report it. Use colour attributes with caution and say so. |
-| No scale reference was placed in the scene | High | Author measures two fixed objects on site afterwards (F6). Until then everything is relative. |
+| No scale reference was placed in the scene | High | Accepted: results are relative and say so (F6, D-020). |
 | Multi-view lifting is unstable | Medium | The orthophoto baseline (F8) is built first and is always shippable. |
 | Railings, lamp post and passers-by occlude `entrance` | High | Reconstruction only for this scene; mask or accept floaters. |
 | Time overrun | Medium | Cut in this order: F18, F19, F17, F15. Never cut F12 or F13. |
 
 ## 12. Open items for the author
 
-- [ ] Measure at least two reference distances on `highwall` (for example plaque width,
-      railing bar spacing) and fill `data/meta/highwall/scale_refs.json`.
 - [x] Confirm the site names and write them into `docs/DATA.md`.
-- [ ] Annotate at least 30 stones on the orthophoto once M4 produces it.
+- [x] Annotate at least 30 stones on the orthophoto once M4 produces it.
 - [ ] Decide the public repository name (suggested: `stone-by-stone`).

@@ -24,8 +24,8 @@ The camera clock was not set to local time. Use EXIF timestamps for ordering onl
 
 ## Known issues
 
-1. **No scale bar.** Scale must come from distances measured on site afterwards. See
-   `data/meta/highwall/scale_refs.example.json`.
+1. **No scale reference.** Nothing of known size was placed in the scene, so the
+   reconstruction is relative: lengths and areas are in scene units.
 2. **`highwall` is short and noisy.** 42 frames at high ISO. Expect weaker matching
    and noisier colour than `entrance`.
 3. **`entrance` has motion blur.** Frames were taken on a 5-second interval while
@@ -38,13 +38,12 @@ The camera clock was not set to local time. Use EXIF timestamps for ordering onl
 
 ## Capture protocol for a second epoch
 
-To make the next capture comparable and metric:
+To make the next capture comparable:
 
 - Overcast daylight, base ISO where possible, shutter 1/125 s or faster.
 - Fixed focal length, fixed focus mode, no zooming between frames.
 - Three passes parallel to the wall (level, tilted up, tilted down) with at least 70 %
   overlap, plus a few oblique frames at each end.
-- Two scale bars or a tape fixed in the scene, visible in at least five frames each.
 - 80–120 frames for a 5 m section.
 - Note the weather and time of day.
 
@@ -64,6 +63,5 @@ To make the next capture comparable and metric:
 ```
 data/
   raw/<scene>/            original photos, read-only, not in git
-  meta/<scene>/           scale_refs.json and other hand-entered measurements
   annotations/<scene>/    ground-truth stone polygons
 ```

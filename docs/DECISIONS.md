@@ -54,8 +54,7 @@ documentation, annotations and the downsampled viewer payload only.
 **Date:** 2026-11-14 · **By:** product
 
 No scale bar was placed during capture. Rather than block on a site revisit, every
-output carries `metric: true | false`. Attributes are reported in millimetres only
-once reference distances have been entered.
+output carries a `metric` flag. *Superseded by D-020:* the project stays relative.
 
 ### D-007 Python 3.11 and PyTorch built for CUDA 12.8
 **Date:** 2026-11-14 · **By:** claude-code
@@ -165,12 +164,11 @@ trusting the trainer's metrics alone (definitions not documented, no LPIPS).
 
 The `frame` ROI keeps points from `roi_band_back` behind to `roi_band_front` in front
 of the fitted plane, inside the convex hull of where the central 80 % of each image
-meets the plane. Without scale references these bands are in scene units, chosen from
+meets the plane. The bands are in scene units, chosen from
 the `highwall` reconstruction (wall about 11 scene units wide, wall relief within
 ±0.05, cavity to about −0.3): 0.4 behind, 0.15 in front. A first try with 1.0 / 0.5
 kept a wide strip of pavement; 0.15 still keeps a narrow one, plus a short piece of the
-return wall at the left end. They must be revisited
-in metres once `scale_refs.json` exists. RANSAC runs on a 300 k-point subsample and the
+return wall at the left end. RANSAC runs on a 300 k-point subsample and the
 plane is then refined by least squares over all inliers.
 
 Ruff's pep8-naming rules N802/N803 are ignored in addition to N806, because the
@@ -200,9 +198,9 @@ RANSAC (leaves the coarse scale error, about 2–3 % on the synthetic case).
 ### D-016 Segmentation parameters while the scene is non-metric
 **Date:** 2026-11-14 · **By:** claude-code
 
-`ortho_gsd_m` and the stone-area bounds are in metres and cannot be used until scale
-references exist. `segment.nonmetric` gives scene-unit equivalents, used whenever
-`transform.json` says `metric: false`: GSD 0.004 (about half the real point spacing, so
+The spec gives the orthophoto GSD and the stone-area bounds in metres, which do not
+apply to a relative reconstruction. They are set in scene units instead (since D-020
+directly as `segment.ortho_gsd`, `min_stone_area`, `max_stone_area`): GSD 0.004 (about half the real point spacing, so
 the orthophoto is 3122 × 2455 px for `highwall`), stone area 0.008–4.0 units². The
 bounds were set from the reconstruction (stones read about 0.3–0.8 units wide). Holes
 in the orthophoto inside the covered area are inpainted after an 11 px closing.
@@ -258,7 +256,7 @@ cavity when many small loose stones are there).
 
 D-016 assumed the annotation stays valid while `dense` and `frame` are not rerun, and a
 first fix mapped the polygons through wall coordinates. Both are wrong for a full
-rerun: without scale references each SfM run has its own arbitrary scale and origin,
+rerun: in a relative reconstruction each SfM run has its own arbitrary scale and origin,
 so the wall frame and the orthophoto grid move (in the from-scratch run: origin shifted
 by 0.05 units, size 3122 × 2455 → 3139 × 2473). Evaluated that way, the mean IoU of
 matched pairs dropped from about 0.74 to 0.71 for both methods, which is what exposed
@@ -271,10 +269,25 @@ polygons; the inlier count, residual and scale go into `stage.json` and RESULTS.
 from-scratch run: 6,545 inliers, 1.17 px RMS at full resolution, scale 1.002; mean IoU
 of matched pairs back to 0.74.
 
-*Rejected:* wall coordinates (not stable across SfM runs while non-metric); asking the
+*Rejected:* wall coordinates (not stable across SfM runs in relative units); asking the
 author to re-annotate after every run; fixing SfM to the old model (would not be a
-from-scratch run). Once scale references exist, the frame becomes metric and stable up
-to the SfM noise, but the image registration stays as the check.
+from-scratch run).
+
+### D-020 No scale reference: the project is relative, and the scale input is removed
+**Date:** 2026-11-15 · **By:** author
+
+The author will not measure reference distances on site. All results stay in relative
+scene units with `metric: false`. The unused scale-reference path is removed rather
+than left dormant: `frame` no longer reads a scale file or triangulates reference
+points, `frame.require_metric` and the metre-valued config keys (`ortho_gsd_m`,
+`min/max_stone_area_m2`, `recession_radius_m`) are gone, the scene-unit values are now
+the only ones, `data/meta/` and the example scale file are deleted, and the docs, the
+README, the generated results text and the viewer no longer refer to measuring later.
+The fact that the results are relative is still stated wherever lengths appear: counts,
+IoU, F1 and ratios are unaffected, lengths and areas are not in metres.
+
+*Rejected:* keeping the scale input for a possible later measurement (the author has
+decided against it, and unused code paths and "not yet" wording invite confusion).
 
 ---
 

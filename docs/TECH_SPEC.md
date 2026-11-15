@@ -103,14 +103,11 @@ outputs/<scene>/
 - Wall frame: `x` along the wall (horizontal), `y` up, `z` outward from the wall
   toward the cameras. Up comes from the mean camera up-vector projected into the
   plane. Origin at the inlier centroid.
-- Scale: if `scale_refs.json` exists, triangulate each reference's two endpoints from
-  its observations, compare with the measured distance and take the scale as the
-  median ratio. Report the per-reference residual. With no file, scale is 1, and
-  `metric: false` is written into `transform.json` and propagated to every later
-  output.
+- Scale: the capture has no scale reference, so scale is 1 and `metric: false` is
+  written into `transform.json` and propagated to every later output (D-020).
 - Crop to a wall region of interest (points within a distance band of the plane, inside
   the convex hull of where the cameras were looking). Save as `dense_wall.ply`.
-- `freeform` scenes skip plane fitting and only apply scale and gravity alignment.
+- `freeform` scenes skip plane fitting and only apply gravity alignment.
 
 ### 4.5 register
 
@@ -137,7 +134,7 @@ Two methods, same output contract: `points_labels.npy`, an integer per point of
 
 **Method `ortho` (baseline, build first).**
 
-1. Rasterise `dense_wall.ply` orthographically along `-z` at `ortho_gsd_m` into an RGB
+1. Rasterise `dense_wall.ply` orthographically along `-z` at `ortho_gsd` into an RGB
    orthophoto and a depth (relief) map. Keep the point-to-pixel index.
 2. Run automatic mask generation with a pretrained SAM-family model on the orthophoto.
    Model and checkpoint chosen in M0.
@@ -166,8 +163,8 @@ diagnose from pictures than from numbers.
 
 ### 4.7 attributes
 
-One record per stone. Lengths in metres or millimetres when metric; otherwise in scene
-units, with `metric: false` at the top of the file.
+One record per stone. Lengths and areas in scene units (relative), with
+`metric: false` at the top of the file.
 
 | Field | Definition |
 |---|---|

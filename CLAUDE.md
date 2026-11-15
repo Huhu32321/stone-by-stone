@@ -57,7 +57,7 @@ is to build what the documents specify, on this machine, and to report honestly.
 
 ```
 configs/        default.yaml and one file per scene
-data/           raw photos (ignored), hand-entered measurements, annotations
+data/           raw photos (ignored), annotations
 docs/           requirements, spec, plan, dataset card, decisions, results
 outputs/        everything the pipeline generates (ignored)
 scripts/        one-off helpers that are not pipeline stages
@@ -68,8 +68,6 @@ viewer/         static web viewer
 
 ## What the author provides, and when
 
-- Reference distances for scale: `data/meta/highwall/scale_refs.json`. May arrive
-  late. Until then, run non-metric and keep the flag.
 - Ground-truth stone polygons: after you produce the orthophoto in M4. Tell the author
   the file to annotate, the tool to use, and where to save the result.
 
