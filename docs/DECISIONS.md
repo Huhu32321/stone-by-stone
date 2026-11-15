@@ -219,6 +219,8 @@ The orthophoto pixel grid depends only on `dense_wall.ply` and the GSD, so an
 annotation drawn on it stays valid if the segmentation parameters change, but not if
 `dense` or `frame` is rerun.
 
+*Update:* that last statement was wrong for a full rerun; see D-019.
+
 ### D-017 `multiview` is the main segmentation; evaluation region derived from the annotation
 **Date:** 2026-11-15 · **By:** author (method), claude-code (region)
 
@@ -250,6 +252,29 @@ neighbouring stones) is unchanged; only "neighbouring" is made explicit.
 *Rejected:* the global wall plane as reference (would fold in the reconstruction's
 overall doming, see `m3` findings); a larger k (the median is still pulled into the
 cavity when many small loose stones are there).
+
+### D-019 Ground truth is registered to each run's orthophoto by image features
+**Date:** 2026-11-15 · **By:** claude-code
+
+D-016 assumed the annotation stays valid while `dense` and `frame` are not rerun, and a
+first fix mapped the polygons through wall coordinates. Both are wrong for a full
+rerun: without scale references each SfM run has its own arbitrary scale and origin,
+so the wall frame and the orthophoto grid move (in the from-scratch run: origin shifted
+by 0.05 units, size 3122 × 2455 → 3139 × 2473). Evaluated that way, the mean IoU of
+matched pairs dropped from about 0.74 to 0.71 for both methods, which is what exposed
+it.
+
+A copy of the orthophoto the author annotated (the 1600 px Gate 2 copy of exactly that
+image) is kept as `data/annotations/highwall/ortho_ref.jpg`. `evaluate` registers the
+current orthophoto to it (SIFT, ratio test, RANSAC 4-DoF similarity) and maps the
+polygons; the inlier count, residual and scale go into `stage.json` and RESULTS. On the
+from-scratch run: 6,545 inliers, 1.17 px RMS at full resolution, scale 1.002; mean IoU
+of matched pairs back to 0.74.
+
+*Rejected:* wall coordinates (not stable across SfM runs while non-metric); asking the
+author to re-annotate after every run; fixing SfM to the old model (would not be a
+from-scratch run). Once scale references exist, the frame becomes metric and stable up
+to the SfM noise, but the image registration stays as the check.
 
 ---
 
