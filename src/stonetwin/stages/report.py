@@ -119,8 +119,8 @@ def results_md(all_m: dict[str, dict], figs: dict[str, str]) -> str:
     metric = get(hw, "frame.metrics.metric")
     if metric is False:
         L += [
-            "> **Not yet metric.** No scale references have been entered, so lengths and "
-            "areas for `highwall` are in arbitrary scene units (the wall region is "
+            "> **Relative units.** The capture contains no scale reference, so lengths "
+            "and areas for `highwall` are in relative scene units (the wall region is "
             f"{f((get(hw, 'frame.metrics.wall_extent') or [None])[0], 1)} units wide). "
             "Ratios, counts, IoU and F1 are unitless and unaffected.",
             "",
@@ -325,7 +325,8 @@ def readme_block(all_m: dict[str, dict]) -> str:
     if metric is False:
         L += [
             "",
-            "_Lengths are not yet metric (no scale references); unitless results are unaffected._",
+            "_Lengths are relative (scene units; the capture has no scale reference). Unitless "
+            "results are unaffected._",
         ]
     return "\n".join(L)
 

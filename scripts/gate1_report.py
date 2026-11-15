@@ -119,7 +119,7 @@ def main() -> None:
             f"{' × '.join(_fmt(v, 2) for v in m['wall_extent'])} {m['units']} units (x, y, z).",
             f"- Wall plane: inlier fraction {_fmt(m['inlier_fraction'])}, inlier RMS "
             f"{_fmt(m['inlier_rms'], 4)}. **metric: {str(m['metric']).lower()}** "
-            f"(no `scale_refs.json` yet; scale = {m['scale']}).",
+            "(relative scene units).",
         ]
     lines.append("")
     gate = OUT / "highwall" / "gate1"

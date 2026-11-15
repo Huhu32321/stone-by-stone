@@ -65,7 +65,7 @@ const FRAG = /* glsl */ `
     gl_FragColor = vec4(c, 1.0);
   }`;
 
-const NOT_SCALED = " This scene is not yet scaled: lengths are in arbitrary scene units.";
+const RELATIVE = " Lengths are relative (scene units): the capture has no scale reference.";
 const el = (id) => document.getElementById(id);
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -103,14 +103,12 @@ function resize() {
 }
 
 function unitLabel(kind) {
-  const u = state.meta.metric ? state.meta.units : "scene units";
+  const u = "scene units";
   return kind === "area" ? `${u}²` : kind === "len" ? u : "";
 }
 
 function fmt(v, kind) {
   if (v === undefined || v === null || Number.isNaN(v)) return "—";
-  if (state.meta.metric && kind === "len") return `${(v * 1000).toFixed(1)} mm`;
-  if (state.meta.metric && kind === "area") return `${(v * 1e4).toFixed(1)} cm²`;
   const a = Math.abs(v);
   const s = a !== 0 && (a < 0.01 || a >= 1e4) ? v.toExponential(2) : v.toFixed(3);
   return kind ? `${s} ${unitLabel(kind)}` : s;
@@ -170,7 +168,7 @@ function showCard(id) {
     </table>
     <p class="muted small">† Condition proxies: simple geometric and colour measurements,
     not validated deterioration classifications. Recession is negative when the stone
-    is set back from its neighbours.${state.meta.metric ? "" : NOT_SCALED}</p>`;
+    is set back from its neighbours.${RELATIVE}</p>`;
   card.hidden = false;
   el("close").onclick = () => showCard(0);
 }
@@ -233,7 +231,7 @@ async function loadScene(name) {
   updateMode();
   el("status").textContent =
     `${n.toLocaleString()} points, ${sdoc.stones.length} stones (${meta.method})` +
-    (meta.metric ? "" : " · not yet scaled");
+    " · relative units";
 }
 
 async function init() {
