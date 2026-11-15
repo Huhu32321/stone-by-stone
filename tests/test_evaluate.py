@@ -5,7 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from stonetwin.stages.evaluate import derive_region, match, rasterize_gt, restrict
+from stonetwin.stages.evaluate import (
+    derive_region,
+    match,
+    rasterize_gt,
+    regrid_shape,
+    restrict,
+)
 
 
 def _sq(x0: int, y0: int, x1: int, y1: int, label: str = "stone") -> dict:
@@ -53,3 +59,11 @@ def test_restrict_and_derived_region() -> None:
     pred[40:50, 40:50] = 9  # outside -> dropped
     out = restrict(pred, region)
     assert out.max() == 1 and (out == 1).sum() == 100
+
+
+def test_regrid_shape_through_wall_coordinates() -> None:
+    src = {"x0": -1.0, "y0": 2.0, "gsd": 0.01}
+    dst = {"x0": -1.02, "y0": 2.03, "gsd": 0.02}
+    sh = regrid_shape({"label": "stone", "points": [[0, 0], [100, 50]]}, src, dst)
+    # wall (-1.0, 2.0) -> dst px (1, 1.5); wall (0.0, 1.5) -> dst px (51, 26.5)
+    assert np.allclose(sh["points"], [[1.0, 1.5], [51.0, 26.5]])

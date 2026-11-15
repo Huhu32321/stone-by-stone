@@ -33,6 +33,18 @@ from stonetwin.stage import AcceptanceError, StageContext, StageError
 from stonetwin.stages.segment import points_to_ortho_labels
 
 
+def regrid_shape(shape: dict, src: dict, dst: dict) -> dict:
+    """Map a labelme shape from orthophoto grid ``src`` to grid ``dst`` (both ortho_meta).
+
+    Pixel coordinates (x right, y down) -> wall (x, y) -> pixel coordinates on ``dst``.
+    """
+    pts = np.asarray(shape["points"], float)
+    wx = src["x0"] + pts[:, 0] * src["gsd"]
+    wy = src["y0"] - pts[:, 1] * src["gsd"]
+    out = np.c_[(wx - dst["x0"]) / dst["gsd"], (dst["y0"] - wy) / dst["gsd"]]
+    return {**shape, "points": out.tolist()}
+
+
 def rasterize_gt(shapes: list[dict], hw: tuple[int, int]) -> tuple[np.ndarray, np.ndarray | None]:
     """Stone label raster (1..N, smaller polygon wins on overlap) and region mask or None."""
     h, w = hw
@@ -163,10 +175,16 @@ def run(ctx: StageContext) -> None:
     meta = json.loads((seg / "ortho" / "ortho_meta.json").read_text(encoding="utf-8"))
     ann = json.loads(gt_path.read_text(encoding="utf-8"))
     hw = (meta["height"], meta["width"])
-    if (ann.get("imageHeight"), ann.get("imageWidth")) != hw:
+    ann_meta_path = gt_path.parent / "ortho_meta.json"
+    if ann_meta_path.is_file():
+        # Polygons were drawn on the grid in ann_meta; map them through wall coordinates
+        # onto the current grid, so a rerun of dense/frame does not invalidate them.
+        am = json.loads(ann_meta_path.read_text(encoding="utf-8"))
+        ann["shapes"] = [regrid_shape(sh, am, meta) for sh in ann["shapes"]]
+    elif (ann.get("imageHeight"), ann.get("imageWidth")) != hw:
         raise StageError(
-            "annotation image size differs from the orthophoto; was it drawn "
-            "on an older orthophoto?"
+            "annotation image size differs from the orthophoto and no ortho_meta.json "
+            "records the grid it was drawn on"
         )
     gt, region = rasterize_gt(ann["shapes"], hw)
     region_source = "polygon"
