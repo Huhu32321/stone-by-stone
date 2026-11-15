@@ -88,7 +88,7 @@ result.
 `npm install && npm run build`.
 
 ### M7 Evaluation and report
-- [ ] `evaluate` for both segmentation methods against the author's annotation.
+- [x] `evaluate` for both segmentation methods against the author's annotation.
 - [ ] `report`: `metrics.json`, `docs/RESULTS.md`, figures, README results block.
 - [ ] `python -m stonetwin all --scene highwall --force` runs clean from scratch.
 
