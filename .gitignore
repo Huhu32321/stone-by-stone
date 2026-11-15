@@ -1,6 +1,7 @@
 # --- data: raw photos and all generated artefacts stay out of git ---
 data/raw/
 outputs/
+CLAUDE.md
 *.ply
 *.splat
 *.ksplat
