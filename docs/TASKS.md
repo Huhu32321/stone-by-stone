@@ -79,10 +79,10 @@ result.
 ## Day 3 — delivery
 
 ### M6 Viewer
-- [ ] `export-viewer`; payload under budget.
-- [ ] Viewer with colour modes, picking and stone card.
+- [x] `export-viewer`; payload under budget.
+- [x] Viewer with colour modes, picking and stone card.
 - [ ] P1: splat layer.
-- [ ] P1: GitHub Pages workflow (do not push; the author publishes).
+- [x] P1: GitHub Pages workflow (do not push; the author publishes).
 
 **Accept:** clicking any stone opens the correct record; runs from a clean
 `npm install && npm run build`.
