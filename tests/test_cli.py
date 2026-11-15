@@ -17,15 +17,27 @@ def test_help_lists_every_stage():
         assert stage in result.output
 
 
-def test_stub_stage_exits_nonzero_without_stage_json(monkeypatch):
-    # 'report' is still a stub; it must fail loudly and not write a fake stage.json.
+def test_failing_stage_exits_nonzero_without_stage_json(monkeypatch):
+    # A stage that raises StageError must exit 1 and must not write a stage.json.
+    # Uses a stand-in for `report` so the real stage (which rewrites docs/) never runs.
+    import stonetwin.cli as cli
+    from stonetwin.stage import StageError
+
+    def boom(ctx):
+        raise StageError("deliberate failure for the test")
+
     monkeypatch.chdir(ROOT)
-    out = ROOT / "outputs" / "highwall" / STAGE_DIRS["report"] / "stage.json"
-    existed = out.exists()
-    result = runner.invoke(app, ["report", "--scene", "highwall"])
-    assert result.exit_code == 1
-    assert "not implemented" in result.output
-    assert out.exists() == existed
+    monkeypatch.setitem(cli.STAGES, "report", boom)
+    monkeypatch.setitem(STAGE_DIRS, "report", "zz_test_failing_stage")
+    out = ROOT / "outputs" / "highwall" / "zz_test_failing_stage"
+    result = runner.invoke(app, ["report", "--scene", "highwall", "--force"])
+    try:
+        assert result.exit_code == 1
+        assert "deliberate failure" in result.output
+        assert not (out / "stage.json").exists()
+    finally:
+        if out.is_dir() and not any(out.iterdir()):
+            out.rmdir()
 
 
 def test_unknown_scene_exits_2(monkeypatch):
