@@ -68,9 +68,9 @@ a one-line diagnosis each. Recommend which method should be presented as the mai
 result.
 
 ### M5 Attributes
-- [ ] `attributes` on the method chosen at Gate 2 (keep the other runnable).
-- [ ] Unit test on a synthetic stone.
-- [ ] Sanity check: the open cavity region shows strongly negative `recession`.
+- [x] `attributes` on the method chosen at Gate 2 (keep the other runnable).
+- [x] Unit test on a synthetic stone.
+- [x] Sanity check: the open cavity region shows strongly negative `recession`.
 
 **Accept:** `stones.json` validates against the field table in the spec; no NaNs.
 

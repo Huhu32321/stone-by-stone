@@ -219,6 +219,38 @@ The orthophoto pixel grid depends only on `dense_wall.ply` and the GSD, so an
 annotation drawn on it stays valid if the segmentation parameters change, but not if
 `dense` or `frame` is rerun.
 
+### D-017 `multiview` is the main segmentation; evaluation region derived from the annotation
+**Date:** 2026-11-15 · **By:** author (method), claude-code (region)
+
+At Gate 2 the author chose `multiview` as the main result; `attributes.method` is set
+to it and `ortho` stays runnable. The author annotated 231 stones over the whole wall
+but drew no `region` polygon. The evaluation region is therefore derived: the union of
+the ground-truth stone polygons, closed morphologically with a disc about one joint
+width across, so mortar between drawn stones is inside the region but large undrawn
+areas (arch voussoirs, plaques, the iron door, the blocked opening's fill) are not.
+A `region` polygon, if one is added later, takes precedence.
+
+*Rejected:* the convex hull of all stones (would count every prediction on the undrawn
+arch and plaques as a false positive); asking for a redraw (the derived region follows
+the spec's intent and costs the author nothing).
+
+### D-018 `recession` neighbourhood is a radius, not the k nearest stones
+**Date:** 2026-11-15 · **By:** claude-code
+
+With the 6 nearest stones as the local wall surface, a stone inside the open cavity is
+compared only with other cavity stones. The M5 sanity check failed on that definition:
+the 26 cavity stones had a median recession of +0.002 although six of the eight most
+recessed stones on the wall were in the cavity. The neighbourhood is now every stone
+whose centroid lies within a radius larger than the recessed area (1.5 scene units
+while non-metric; the cavity is about 1.0 × 1.5), with at least 6 stones. Second
+attempt: cavity median −0.107, 96 % of cavity stones negative, against a median of
++0.001 and a 5th percentile of −0.016 elsewhere. The spec's definition (median z of
+neighbouring stones) is unchanged; only "neighbouring" is made explicit.
+
+*Rejected:* the global wall plane as reference (would fold in the reconstruction's
+overall doming, see `m3` findings); a larger k (the median is still pulled into the
+cavity when many small loose stones are there).
+
 ---
 
 <!-- Template
