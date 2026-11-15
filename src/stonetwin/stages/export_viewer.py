@@ -128,4 +128,4 @@ def run(ctx: StageContext) -> None:
 def _gsd(ctx: StageContext, tf: dict) -> float:
     from stonetwin.stages.segment import scale_params
 
-    return scale_params(ctx.cfg["segment"], tf["metric"])["gsd"]
+    return scale_params(ctx.cfg["segment"])["gsd"]

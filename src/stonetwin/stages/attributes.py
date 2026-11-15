@@ -1,9 +1,9 @@
 """Stage ``attributes``: one record per stone (TECH_SPEC 4.7).
 
 Input: ``04_frame/dense_wall.ply`` (wall frame: x along the wall, y up, z out of the
-wall) and ``06_segment/<method>/points_labels.npy``. Lengths are metres when
-``transform.json`` says ``metric: true``, otherwise scene units; ``metric`` is written
-at the top of ``stones.json``.
+wall) and ``06_segment/<method>/points_labels.npy``. Lengths and areas are in scene
+units (relative: the capture has no scale reference, D-020); ``metric: false`` is
+written at the top of ``stones.json``.
 
 ``roughness_rms``, ``recession`` and ``colour_delta_e`` are condition proxies: simple
 geometric and colour measurements. They are not deterioration classes.
@@ -186,8 +186,8 @@ def run(ctx: StageContext) -> None:
         "cloud": "04_frame/dense_wall.ply",
         "labels": lab_path.relative_to(ctx.scene_dir).as_posix(),
     }
-    gsd = scale_params(ctx.cfg["segment"], tf["metric"])["gsd"]
-    rad = acfg["recession_radius_m"] if tf["metric"] else acfg["nonmetric"]["recession_radius"]
+    gsd = scale_params(ctx.cfg["segment"])["gsd"]
+    rad = acfg["recession_radius"]
     recs = stone_records(
         p_wall,
         rgb,

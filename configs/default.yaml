@@ -39,8 +39,7 @@ splat:
   lpips_net: vgg                   # LPIPS backbone, as in the original 3DGS evaluation
 
 frame:
-  plane_ransac_threshold: 0.01     # in scene units before scaling
-  require_metric: false            # pipeline runs without scale refs, but flags it
+  plane_ransac_threshold: 0.01     # scene units (the project is relative, D-020)
   min_inlier_fraction: 0.3         # fail if the dominant plane explains less of the cloud
   roi_band_front: 0.15             # scene units in front of the plane kept (relief, plaques)
   roi_band_back: 0.4               # scene units behind the plane kept (cavity, recesses)
@@ -66,16 +65,12 @@ register:
 
 segment:
   methods: [ortho, multiview]      # ortho = guaranteed baseline, multiview = main method
-  ortho_gsd_m: 0.002               # orthophoto ground sampling distance
-  min_stone_area_m2: 0.002
-  max_stone_area_m2: 1.0
+  ortho_gsd: 0.004                 # orthophoto pixel, scene units (~ half the point spacing)
+  min_stone_area: 0.008            # scene units^2 (about 0.09 x 0.09)
+  max_stone_area: 4.0              # scene units^2
   multiview_affinity_threshold: 0.5
   contain_frac: 0.9                # a mask containing >= 90 % of a smaller one is dropped
   ortho_hole_close_px: 11          # closing size for the orthophoto coverage mask
-  nonmetric:                       # used while transform.json says metric: false (D-016)
-    ortho_gsd: 0.004               # scene units per pixel (~ half the point spacing)
-    min_stone_area: 0.008          # scene units^2 (about 0.09 x 0.09)
-    max_stone_area: 4.0            # scene units^2
   multiview:
     depth_rel_tol: 0.02            # point kept in a view if |z - depth| <= 2 % of depth
     min_mask_px: 400               # per-image masks smaller than this are ignored
@@ -105,9 +100,7 @@ attributes:
   min_points: 50                   # stones with fewer supporting points are skipped
   footprint_close_px: 5            # closing (at the ortho GSD) before the concave hull
   recession_neighbours: 6          # minimum number of neighbour stones
-  recession_radius_m: 0.75         # neighbour radius when metric; must exceed recess size
-  nonmetric:
-    recession_radius: 1.5          # scene units; the cavity is about 1.0 x 1.5 (D-018)
+  recession_radius: 1.5            # scene units; must exceed the cavity (~1.0 x 1.5, D-018)
 
 evaluate:
   min_gt_stones: 30

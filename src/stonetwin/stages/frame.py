@@ -1,23 +1,21 @@
-"""Stage ``frame``: wall plane, wall frame, scale and region of interest.
+"""Stage ``frame``: wall plane, wall frame and region of interest.
 
 Frames:
     ``world``: the SfM frame (arbitrary origin, orientation, scale).
     ``wall``: x along the wall (horizontal), y up, z out of the wall toward the
-    cameras; origin at the plane-inlier centroid. Units are metres when
-    ``scale_refs.json`` exists (``metric: true``), otherwise scene units (scale 1).
+    cameras; origin at the plane-inlier centroid. Units are the SfM scene units: the
+    capture has no scale reference, so the frame is relative (``metric: false``, D-020).
 
 ``p_wall = T_wall_from_world @ [p_world, 1]`` with
 ``T_wall_from_world = [[s R, -s R o], [0, 1]]``, ``R`` rows = wall axes in world,
-``o`` = origin in world, ``s`` = metres per scene unit (1 when non-metric).
+``o`` = origin in world, ``s`` = 1 (kept in the matrix so the convention is explicit).
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
-import cv2
 import numpy as np
 import open3d as o3d
 from scipy.spatial import Delaunay
@@ -101,24 +99,6 @@ def apply_T(T: np.ndarray, p: np.ndarray) -> np.ndarray:
     return p @ T[:3, :3].T + T[:3, 3]
 
 
-def triangulate(P_list: list[np.ndarray], x_list: list[np.ndarray]) -> np.ndarray:
-    """Linear (DLT) triangulation from normalised image points.
-
-    Args:
-        P_list: 3x4 ``[R | t]`` cam-from-world matrices (normalised coordinates).
-        x_list: undistorted normalised image points ``(x, y)``.
-    Returns:
-        The point in world coordinates.
-    """
-    A = []
-    for P, (u, v) in zip(P_list, x_list, strict=True):
-        A.append(u * P[2] - P[0])
-        A.append(v * P[2] - P[1])
-    _, _, vt = np.linalg.svd(np.asarray(A))
-    X = vt[-1]
-    return X[:3] / X[3]
-
-
 # --------------------------------------------------------------------------- inputs
 def _cameras(ctx: StageContext) -> dict[str, Any]:
     path = ctx.stage_dir("sfm") / "cameras.json"
@@ -131,41 +111,6 @@ def _cam_arrays(cams: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Camera centres, up-vectors and forward-vectors in world (OpenCV: up = -y_cam)."""
     T = np.array([im["T_world_from_cam"] for im in cams["images"]])
     return T[:, :3, 3], -T[:, :3, 1], T[:, :3, 2]
-
-
-def _scale_from_refs(path: Path, cams: dict) -> tuple[float, list[dict]]:
-    """Scale (metres per scene unit) as the median ratio over references."""
-    refs = json.loads(path.read_text(encoding="utf-8"))["references"]
-    by_name = {im["name"]: im for im in cams["images"]}
-    rows, ratios = [], []
-    for ref in refs:
-        ends = []
-        for key in ("p1", "p2"):
-            Ps, xs = [], []
-            for ob in ref["observations"]:
-                im = by_name.get(ob["image"])
-                if im is None:
-                    continue
-                cam = cams["cameras"][str(im["camera_id"])]
-                K = np.array(cam["K"])
-                dist = np.array(cam["dist"] or [0, 0, 0, 0], float)
-                xn = cv2.undistortPoints(np.array([[ob[key]]], float), K, dist).reshape(2)
-                Ps.append(np.linalg.inv(np.array(im["T_world_from_cam"]))[:3])
-                xs.append(xn)
-            if len(Ps) < 2:
-                raise StageError(
-                    f"scale reference '{ref['name']}' has fewer than two registered views"
-                )
-            ends.append(triangulate(Ps, xs))
-        d_scene = float(np.linalg.norm(ends[0] - ends[1]))
-        if ref["distance_m"] <= 0 or d_scene <= 0:
-            raise StageError(f"scale reference '{ref['name']}' has a non-positive distance")
-        ratios.append(ref["distance_m"] / d_scene)
-        rows.append({"name": ref["name"], "distance_m": ref["distance_m"], "d_scene": d_scene})
-    s = float(np.median(ratios))
-    for r in rows:
-        r["residual_m"] = s * r["d_scene"] - r["distance_m"]
-    return s, rows
 
 
 def _roi_hull_wall(cams: dict, T: np.ndarray, frac: float) -> np.ndarray:
@@ -191,11 +136,10 @@ def _roi_hull_wall(cams: dict, T: np.ndarray, frac: float) -> np.ndarray:
 
 # --------------------------------------------------------------------------- stage
 def run(ctx: StageContext) -> None:
-    """Fit the wall frame, apply scale, crop ``dense_wall.ply`` (wall frame).
+    """Fit the wall frame and crop ``dense_wall.ply`` (wall frame, scene units).
 
     Raises:
-        AcceptanceError: too few plane inliers, or ``frame.require_metric`` is true
-            and no scale references exist.
+        AcceptanceError: too few plane inliers.
     """
     fcfg = dict(ctx.cfg["frame"])
     ctx.params = fcfg
@@ -208,19 +152,8 @@ def run(ctx: StageContext) -> None:
     p_world = np.asarray(pcd.points)
     seed = int(ctx.cfg["seed"])
 
-    refs_path = ctx.root / ctx.cfg["meta_dir"] / "scale_refs.json"
-    ctx.inputs = {
-        "dense": "02_dense/dense.ply",
-        "cameras": "01_sfm/cameras.json",
-        "scale_refs": refs_path.relative_to(ctx.root).as_posix() if refs_path.is_file() else None,
-    }
-    if refs_path.is_file():
-        scale, ref_rows = _scale_from_refs(refs_path, cams)
-        metric = True
-    else:
-        if fcfg["require_metric"]:
-            raise AcceptanceError(f"frame.require_metric is true but {refs_path} is missing")
-        scale, ref_rows, metric = 1.0, [], False
+    ctx.inputs = {"dense": "02_dense/dense.ply", "cameras": "01_sfm/cameras.json"}
+    scale, metric = 1.0, False  # relative units: no scale reference in the capture (D-020)
 
     geometry = ctx.cfg.get("geometry", "planar")
     plane_info: dict[str, Any] = {}
@@ -271,7 +204,7 @@ def run(ctx: StageContext) -> None:
         out.normals = o3d.utility.Vector3dVector(nrm)
     o3d.io.write_point_cloud(str(ctx.out_dir / "dense_wall.ply"), out)
 
-    units = "m" if metric else "scene"
+    units = "scene"
     transform = {
         "T_wall_from_world": T.tolist(),
         "R_wall_from_world": R.tolist(),
@@ -280,7 +213,6 @@ def run(ctx: StageContext) -> None:
         "metric": metric,
         "units": units,
         "geometry": geometry,
-        "scale_refs": ref_rows,
         "convention": "p_wall = T_wall_from_world @ [p_world, 1]; x along wall, y up, "
         "z out of wall toward cameras",
     }
@@ -293,7 +225,6 @@ def run(ctx: StageContext) -> None:
         "metric": metric,
         "units": units,
         "scale": scale,
-        "scale_residuals_m": [r["residual_m"] for r in ref_rows],
         "n_points_in": int(len(p_wall)),
         "n_points_wall": int(keep.sum()),
         "wall_extent": (pk.max(0) - pk.min(0)).tolist(),

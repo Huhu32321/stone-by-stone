@@ -266,7 +266,7 @@ def run_multiview(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: di
     point_comp[win_pt[strong]] = win_cl[strong]
 
     # 6. Area filter in the wall plane (footprint at the ortho GSD).
-    spm = scale_params(seg, tf["metric"])
+    spm = scale_params(seg)
     gsd = spm["gsd"]
     cell = np.floor(p_wall[:, :2] / gsd).astype(np.int64)
     cell_key = (cell[:, 0] - cell[:, 0].min()) * (cell[:, 1].max() - cell[:, 1].min() + 1) + (

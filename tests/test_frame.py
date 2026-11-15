@@ -1,4 +1,4 @@
-"""Plane fit and wall-frame axes on a synthetic tilted plane; triangulation."""
+"""Plane fit and wall-frame axes on a synthetic tilted plane."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from stonetwin.stages.frame import (
     apply_T,
     fit_plane_ransac,
     make_T,
-    triangulate,
     wall_axes,
 )
 
@@ -22,7 +21,7 @@ def _rot(axis: np.ndarray, deg: float) -> np.ndarray:
 
 def test_plane_and_wall_frame_on_tilted_plane() -> None:
     rng = np.random.default_rng(1)
-    # Wall in its own frame: x in [-2, 2], y in [-1, 1], z ~ 0 with 2 mm noise, plus outliers.
+    # Wall in its own frame: x in [-2, 2], y in [-1, 1], z ~ 0 with 0.002 noise, plus outliers.
     p_wall_true = np.c_[
         rng.uniform(-2, 2, 4000), rng.uniform(-1, 1, 4000), rng.normal(0, 0.002, 4000)
     ]
@@ -49,14 +48,3 @@ def test_plane_and_wall_frame_on_tilted_plane() -> None:
     p = apply_T(T, p_world[:4000])
     assert abs(np.median(p[:, 2])) < 0.01
     assert np.allclose(p[:, 0].max() - p[:, 0].min(), 8.0, atol=0.05)  # 4 units * 2
-
-
-def test_triangulate_two_views() -> None:
-    X = np.array([0.3, -0.2, 4.0])
-    Ps, xs = [], []
-    for tx in (0.0, -1.0, 0.7):
-        P = np.c_[np.eye(3), [tx, 0, 0]]
-        x = P @ np.r_[X, 1]
-        Ps.append(P)
-        xs.append(x[:2] / x[2])
-    assert np.allclose(triangulate(Ps, xs), X, atol=1e-9)

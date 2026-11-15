@@ -10,8 +10,7 @@ index.
 
 Orthophoto pixel geometry (``ortho_meta.json``): pixel (row r, col c) covers wall
 coordinates ``x in [x0 + c*gsd, x0 + (c+1)*gsd)``, ``y in (y0 - (r+1)*gsd, y0 - r*gsd]``;
-``x0`` is the left edge, ``y0`` the top edge. Units follow ``transform.json``
-(metres when metric, scene units otherwise).
+``x0`` is the left edge, ``y0`` the top edge. Units are scene units (relative; D-020).
 
 Method ``multiview``: see :mod:`stonetwin.stages.segment_multiview`.
 """
@@ -195,19 +194,12 @@ def load_wall(ctx: StageContext) -> tuple[np.ndarray, np.ndarray, dict]:
     return np.asarray(pcd.points), np.asarray(pcd.colors), json.loads(tj.read_text("utf-8"))
 
 
-def scale_params(seg: dict, metric: bool) -> dict[str, float]:
-    """GSD and stone-area bounds in the cloud's units (m when metric, else scene)."""
-    if metric:
-        return {
-            "gsd": seg["ortho_gsd_m"],
-            "min_area": seg["min_stone_area_m2"],
-            "max_area": seg["max_stone_area_m2"],
-        }
-    nm = seg["nonmetric"]
+def scale_params(seg: dict) -> dict[str, float]:
+    """Orthophoto GSD and stone-area bounds, in scene units (the project is relative)."""
     return {
-        "gsd": nm["ortho_gsd"],
-        "min_area": nm["min_stone_area"],
-        "max_area": nm["max_stone_area"],
+        "gsd": seg["ortho_gsd"],
+        "min_area": seg["min_stone_area"],
+        "max_area": seg["max_stone_area"],
     }
 
 
@@ -217,7 +209,7 @@ def run_ortho(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) 
     from stonetwin.sam import generate, load_generator
 
     seg = ctx.cfg["segment"]
-    sp = scale_params(seg, tf["metric"])
+    sp = scale_params(seg)
     out = ctx.out_dir / "ortho"
     out.mkdir(parents=True, exist_ok=True)
 
