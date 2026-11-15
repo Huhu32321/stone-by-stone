@@ -11,15 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 import open3d as o3d
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).parent))
-from label_maps import raster_labels  # noqa: E402
+from stonetwin.stages.segment import points_to_ortho_labels as raster_labels
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "outputs"

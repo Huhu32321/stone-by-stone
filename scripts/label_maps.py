@@ -11,25 +11,17 @@ import argparse
 import json
 from pathlib import Path
 
-import cv2
 import numpy as np
 import open3d as o3d
 from PIL import Image
 
-from stonetwin.stages.segment import label_colours, overlay_boundaries
-
-
-def raster_labels(p_wall: np.ndarray, labels: np.ndarray, meta: dict) -> np.ndarray:
-    """Front-most point's label per orthophoto pixel, small gaps closed."""
-    g = meta["gsd"]
-    col = np.floor((p_wall[:, 0] - meta["x0"]) / g).astype(int)
-    row = np.floor((meta["y0"] - p_wall[:, 1]) / g).astype(int)
-    ok = (col >= 0) & (col < meta["width"]) & (row >= 0) & (row < meta["height"])
-    o = np.argsort(p_wall[ok, 2])
-    lab = np.zeros((meta["height"], meta["width"]), np.int32)
-    lab[row[ok][o], col[ok][o]] = labels[ok][o]
-    closed = cv2.morphologyEx(lab.astype(np.float32), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    return np.where(lab == 0, closed.astype(np.int32), lab)
+from stonetwin.stages.segment import (
+    label_colours,
+    overlay_boundaries,
+)
+from stonetwin.stages.segment import (
+    points_to_ortho_labels as raster_labels,
+)
 
 
 def main() -> None:

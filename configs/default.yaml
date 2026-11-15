@@ -111,6 +111,9 @@ attributes:
 evaluate:
   min_gt_stones: 30
   iou_match_threshold: 0.5
+  iou_sweep: [0.3, 0.5, 0.7]       # extra F1 values, reported for information only
+  cover_frac: 0.5                  # "mostly inside" for over-/under-segmentation counts
+  region_close_px: 41              # closing for the derived region (~2-3 joint widths, D-017)
 
 viewer:
   max_points: 1500000

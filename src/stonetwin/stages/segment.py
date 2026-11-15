@@ -165,6 +165,22 @@ def overlay_boundaries(img: np.ndarray, label: np.ndarray) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------- helpers
+def points_to_ortho_labels(p_wall: np.ndarray, labels: np.ndarray, meta: dict) -> np.ndarray:
+    """Front-most point's label per orthophoto pixel (grid of ``meta``), gaps closed.
+
+    A 5 px closing fills pixels without a point inside labelled areas.
+    """
+    g = meta["gsd"]
+    col = np.floor((p_wall[:, 0] - meta["x0"]) / g).astype(int)
+    row = np.floor((meta["y0"] - p_wall[:, 1]) / g).astype(int)
+    ok = (col >= 0) & (col < meta["width"]) & (row >= 0) & (row < meta["height"])
+    o = np.argsort(p_wall[ok, 2])
+    lab = np.zeros((meta["height"], meta["width"]), np.int32)
+    lab[row[ok][o], col[ok][o]] = labels[ok][o]
+    closed = cv2.morphologyEx(lab.astype(np.float32), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    return np.where(lab == 0, closed.astype(np.int32), lab)
+
+
 def load_wall(ctx: StageContext) -> tuple[np.ndarray, np.ndarray, dict]:
     """``dense_wall.ply`` points (wall frame), colours [0, 1], and ``transform.json``."""
     fdir = ctx.stage_dir("frame")
