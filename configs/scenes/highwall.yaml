@@ -7,3 +7,6 @@ annotations_dir: data/annotations/highwall
 geometry: planar
 segment:
   methods: [ortho, multiview]
+attributes:
+  check_regions:                   # wall frame [x0, x1, y0, y1], scene units while non-metric
+    cavity: [-2.89, -1.84, -1.69, -0.23]   # the open cavity (located in M2)

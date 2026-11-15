@@ -273,5 +273,20 @@ def run(ctx: StageContext) -> None:
         "recession_p05": float(np.percentile(rec, 5)),
         "colour_delta_e_median": float(np.median([r["colour_delta_e"] for r in recs])),
     }
+    # Named check regions (scene config, wall frame, current units): recession inside vs
+    # outside, e.g. the open cavity, which must read as strongly set back (TASKS M5).
+    checks = {}
+    cxy = np.array([r["centroid_wall"][:2] for r in recs])
+    for name, (x0, x1, y0, y1) in (acfg.get("check_regions") or {}).items():
+        inside = (cxy[:, 0] >= x0) & (cxy[:, 0] <= x1) & (cxy[:, 1] >= y0) & (cxy[:, 1] <= y1)
+        if inside.any():
+            checks[name] = {
+                "n_stones": int(inside.sum()),
+                "recession_median_inside": float(np.median(rec[inside])),
+                "recession_fraction_negative_inside": float((rec[inside] < 0).mean()),
+                "recession_median_outside": float(np.median(rec[~inside])),
+                "recession_p05_outside": float(np.percentile(rec[~inside], 5)),
+            }
+    ctx.metrics["check_regions"] = checks
     if problems:
         raise AcceptanceError(f"{len(problems)} invalid stone records, e.g. {problems[0]}")
