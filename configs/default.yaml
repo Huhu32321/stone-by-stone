@@ -115,3 +115,4 @@ evaluate:
 viewer:
   max_points: 1500000
   max_payload_mb: 30
+  outline_tolerance_px: 1.5        # outline simplification, in ortho GSD pixels
