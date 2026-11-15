@@ -131,7 +131,6 @@ viewer/         web viewer
 - [Requirements](docs/PRD.md)
 - [Technical specification](docs/TECH_SPEC.md)
 - [Dataset card](docs/DATA.md)
-- [Design decisions](docs/DECISIONS.md)
 
 ## Related work
 
