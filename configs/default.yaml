@@ -99,6 +99,15 @@ segment:
     crop_n_points_downscale_factor: 1
     min_mask_region_area: 0
 
+attributes:
+  method: multiview                # chosen at Gate 2 (D-017); ortho stays runnable
+  min_points: 50                   # stones with fewer supporting points are skipped
+  footprint_close_px: 5            # closing (at the ortho GSD) before the concave hull
+  recession_neighbours: 6          # minimum number of neighbour stones
+  recession_radius_m: 0.75         # neighbour radius when metric; must exceed recess size
+  nonmetric:
+    recession_radius: 1.5          # scene units; the cavity is about 1.0 x 1.5 (D-018)
+
 evaluate:
   min_gt_stones: 30
   iou_match_threshold: 0.5
