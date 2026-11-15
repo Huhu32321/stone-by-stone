@@ -90,7 +90,7 @@ result.
 ### M7 Evaluation and report
 - [x] `evaluate` for both segmentation methods against the author's annotation.
 - [x] `report`: `metrics.json`, `docs/RESULTS.md`, figures, README results block.
-- [ ] `python -m stonetwin all --scene highwall --force` runs clean from scratch.
+- [x] `python -m stonetwin all --scene highwall --force` runs clean from scratch.
 
 **Accept:** every number in `README.md` and `docs/RESULTS.md` is traceable to
 `metrics.json`.
