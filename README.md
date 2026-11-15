@@ -28,7 +28,15 @@ the result in a web viewer where every stone can be clicked.
 ## Results
 
 <!-- RESULTS:START -->
-_Not yet generated. Run `python -m stonetwin report --scene highwall`._
+| Result | Value |
+|---|---|
+| `highwall` splat, held-out PSNR / SSIM / LPIPS | 34.75 dB / 0.969 / 0.096 |
+| `entrance` splat, held-out PSNR / SSIM / LPIPS | 22.75 dB / 0.819 / 0.232 |
+| Stone segmentation F1 at IoU ≥ 0.5, multiview / ortho (231 hand-drawn stones) | 0.524 / 0.465 |
+| Half-to-half registration: scale error vs. camera reference | 0.90 % |
+| Open cavity stones set back (recession < 0) | 0.96 |
+
+_Lengths are not yet metric (no scale references); unitless results are unaffected._
 <!-- RESULTS:END -->
 
 Full tables and figures: [`docs/RESULTS.md`](docs/RESULTS.md).
