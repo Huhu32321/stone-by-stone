@@ -19,6 +19,7 @@ from PIL import Image
 from stonetwin.stage import STAGE_DIRS, StageContext, StageError
 
 START, END = "<!-- RESULTS:START -->", "<!-- RESULTS:END -->"
+REC_START, REC_END = "<!-- RECORD:START -->", "<!-- RECORD:END -->"
 
 
 def merge_scene(scene_dir: Path) -> dict[str, Any]:
@@ -188,14 +189,8 @@ def results_md(all_m: dict[str, dict], figs: dict[str, str]) -> str:
             "",
         ]
         if "c2c" in figs:
-            L += [
-                f"![cloud-to-cloud]({figs['c2c']})",
-                "",
-                "The signed residual on the wall is a smooth bowl, not noise: each half "
-                "calibrated its own lens distortion, which bends each reconstruction "
-                "slightly differently. A similarity transform cannot absorb it.",
-                "",
-            ]
+            L += [f"![cloud-to-cloud]({figs['c2c']})", ""]
+        L += control_section(get(hw, "register-control.metrics"), figs)
 
     s = get(hw, "segment.metrics")
     e = get(hw, "evaluate.metrics")
@@ -210,6 +205,13 @@ def results_md(all_m: dict[str, dict], figs: dict[str, str]) -> str:
             f"| Fraction of points labelled | {f(get(s, 'ortho.labelled_point_fraction'))} | "
             f"{f(get(s, 'multiview.labelled_point_fraction'))} |",
         ]
+        if get(s, "exclusions.n_polygons"):
+            L.append(
+                f"| Stones removed by the {f(get(s, 'exclusions.n_polygons'))} exclusion "
+                f"polygons (plaques, metal door; D-021) | "
+                f"{f(get(s, 'ortho.exclusion.stones_removed'))} | "
+                f"{f(get(s, 'multiview.exclusion.stones_removed'))} |"
+            )
         if e:
             rows = [
                 ("Ground-truth stones in region", "n_gt"),
@@ -288,6 +290,105 @@ def results_md(all_m: dict[str, dict], figs: dict[str, str]) -> str:
     return "\n".join(L).rstrip() + "\n"
 
 
+def control_finding(b: dict, x: dict) -> str:
+    """Interpretation of the control, chosen by rule from the measured values.
+
+    The causal reading is stated only if fixing the intrinsics at least halves both the
+    bowl amplitude and the scale error; otherwise the text says "consistent with".
+    """
+    amp = get(x, "doming.amplitude_rel_extent") / get(b, "doming.amplitude_rel_extent")
+    scl = abs(x["scale_rel_error"]) / abs(b["scale_rel_error"])
+    caveat = (
+        " Caveat: the fixed intrinsics and the camera-pose reference both come from the "
+        "full-scene model, so the reference errors in the control are not fully "
+        "independent of it; the bowl amplitude is measured cloud to cloud and does not "
+        "use the reference."
+    )
+    if amp <= 0.5 and scl <= 0.5:
+        return (
+            "With the intrinsics fixed, the bowl and the scale error both shrink to less "
+            "than half. The bowl in the baseline therefore comes mainly from each half "
+            "calibrating its own lens distortion, which a near-parallel capture "
+            "constrains poorly; a similarity transform cannot absorb it. A weaker "
+            "large-scale pattern remains with the intrinsics fixed, so it is not the only "
+            "source." + caveat
+        )
+    return (
+        "Fixing the intrinsics does not halve both the bowl and the scale error. The "
+        "bowl is consistent with each half calibrating its own lens distortion, but this "
+        "control does not confirm it." + caveat
+    )
+
+
+def control_section(c: dict | None, figs: dict[str, str]) -> list[str]:
+    """RESULTS lines for the fixed-intrinsics control (``register-control``)."""
+    if not c:
+        return [
+            "The signed residual on the wall shows a smooth bowl. The fixed-intrinsics "
+            "control (`register-control`) has not been run, so its cause is not tested.",
+            "",
+        ]
+    b, x = c["baseline"], c["fixed_intrinsics"]
+    rows = [
+        (
+            "Bowl amplitude (quadratic part, p99 − p1) / scene size",
+            "doming.amplitude_rel_extent",
+            100,
+            3,
+            " %",
+        ),
+        (
+            "Share of residual variance explained by a quadric",
+            "doming.explained_fraction",
+            1,
+            2,
+            "",
+        ),
+        ("Signed residual RMS / scene size", "doming.rms_rel_extent", 100, 3, " %"),
+        (
+            "Cloud-to-cloud median, overlap / scene size",
+            "c2c_overlap_median_rel_extent",
+            100,
+            3,
+            " %",
+        ),
+        ("Scale error vs. camera reference", "scale_rel_error", 100, 2, " %"),
+        ("Rotation error vs. camera reference (deg)", "rotation_error_deg", 1, 3, ""),
+        ("Translation error / scene size", "translation_error_rel_extent", 100, 3, " %"),
+    ]
+    L = [
+        "### Control: intrinsics held fixed",
+        "",
+        "The same two halves were reconstructed again with focal length, principal point "
+        "and distortion fixed to the full-scene model's values (no refinement in bundle "
+        "adjustment), then aligned and measured the same way. Bowl amplitude: a quadric "
+        "is fitted to the signed residual over the overlap, in the wall plane; the value "
+        "is the spread (99th − 1st percentile) of its quadratic part. Lengths are divided "
+        "by the diagonal of half A so the two runs, each in its own gauge, compare.",
+        "",
+        "| | each half calibrates itself | intrinsics fixed |",
+        "|---|---|---|",
+    ]
+    for label, key, k, nd, unit in rows:
+        vb, vx = get(b, key), get(x, key)
+        L.append(
+            f"| {label} | {f(None if vb is None else k * vb, nd)}{unit} | "
+            f"{f(None if vx is None else k * vx, nd)}{unit} |"
+        )
+    L += [""]
+    if "c2c_fixed" in figs:
+        L += [
+            f"![cloud-to-cloud, intrinsics fixed]({figs['c2c_fixed']})",
+            "",
+            "Residual with the intrinsics fixed. Each residual figure clips its colour "
+            "scale at its own 95th percentile of the absolute residual, so compare the "
+            "colour bars, not only the colours.",
+            "",
+        ]
+    L += [control_finding(b, x), ""]
+    return L
+
+
 def readme_block(all_m: dict[str, dict]) -> str:
     """Short results table for the README."""
     hw = all_m.get("highwall", {})
@@ -331,6 +432,56 @@ def readme_block(all_m: dict[str, dict]) -> str:
     return "\n".join(L)
 
 
+def _round(v: Any, sig: int = 4) -> Any:
+    if isinstance(v, float):
+        return float(f"{v:.{sig}g}")
+    if isinstance(v, list):
+        return [_round(x, sig) for x in v]
+    return v
+
+
+def example_record(stones_path: Path) -> str | None:
+    """README block: one real record from ``stones.json``.
+
+    The stone shown is the one whose face area is closest to the median face area of
+    the stones that have a recession value (a typical stone, chosen by rule). Floats are
+    rounded to 4 significant digits; the outline is replaced by its vertex count.
+    """
+    if not stones_path.is_file():
+        return None
+    doc = json.loads(stones_path.read_text(encoding="utf-8"))
+    st = [x for x in doc["stones"] if x.get("recession") is not None]
+    if not st:
+        return None
+    med = float(np.median([x["face_area"] for x in st]))
+    rec = min(st, key=lambda x: (abs(x["face_area"] - med), x["id"]))
+    shown = {k: _round(v) for k, v in rec.items() if k != "outline_wall"}
+    shown["outline_wall"] = f"[{len(rec['outline_wall'])} vertices, omitted here]"
+    lines = [f'  "{k}": {json.dumps(v)}' for k, v in shown.items()]
+    units = "metres" if doc.get("metric") else "scene units (relative)"
+    return "\n".join(
+        [
+            f"Stone {rec['id']} of {len(doc['stones'])} (`{doc['method']}` method), chosen by "
+            f"rule as the stone whose face area is closest to the median. Lengths in {units}; "
+            f"frame: {doc['frame']}.",
+            "",
+            "```json",
+            "{",
+            ",\n".join(lines),
+            "}",
+            "```",
+        ]
+    )
+
+
+def _replace_block(text: str, start: str, end: str, body: str) -> str:
+    """Replace everything between two README markers (markers kept)."""
+    if start not in text or end not in text:
+        raise StageError(f"README.md has no {start} / {end} markers")
+    block = f"{start}\n{body}\n{end}"
+    return re.sub(re.escape(start) + r".*?" + re.escape(end), lambda _: block, text, flags=re.S)
+
+
 def run(ctx: StageContext) -> None:
     """Merge metrics for every scene with outputs; regenerate RESULTS.md, figures, README."""
     out_root = ctx.root / "outputs"
@@ -351,6 +502,10 @@ def run(ctx: StageContext) -> None:
     if _fig_copy(sd / "05_register" / "c2c.png", figdir / f"{ctx.scene}_c2c.jpg"):
         figs["c2c"] = f"figures/{ctx.scene}_c2c.jpg"
     if _fig_copy(
+        sd / "05_register_control" / "c2c.png", figdir / f"{ctx.scene}_c2c_fixed_intrinsics.jpg"
+    ):
+        figs["c2c_fixed"] = f"figures/{ctx.scene}_c2c_fixed_intrinsics.jpg"
+    if _fig_copy(
         sd / "08_evaluate" / "overlays" / "multiview.png",
         figdir / f"{ctx.scene}_eval_multiview.jpg",
     ):
@@ -361,10 +516,10 @@ def run(ctx: StageContext) -> None:
     (ctx.root / "docs" / "RESULTS.md").write_text(results_md(all_m, figs), encoding="utf-8")
     readme = ctx.root / "README.md"
     text = readme.read_text(encoding="utf-8")
-    if START not in text or END not in text:
-        raise StageError("README.md has no RESULTS:START/END markers")
-    block = f"{START}\n{readme_block(all_m)}\n{END}"
-    text = re.sub(re.escape(START) + r".*?" + re.escape(END), lambda _: block, text, flags=re.S)
+    text = _replace_block(text, START, END, readme_block(all_m))
+    rec = example_record(sd / "07_attributes" / "stones.json")
+    if rec is not None:
+        text = _replace_block(text, REC_START, REC_END, rec)
     readme.write_text(text, encoding="utf-8")
     ctx.inputs = {"scenes": list(all_m)}
     ctx.metrics = {"scenes": list(all_m), "figures": sorted(figs.values())}
