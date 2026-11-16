@@ -238,17 +238,186 @@ def fine_align(
 
 
 # --------------------------------------------------------------------------- stage
-def _reconstruct(ctx: StageContext, tag: str, names: list[str], colmap: Path) -> dict:
-    """SfM + MVS for one subset under ``05_register/<tag>/``."""
+def signed_residual(pa: np.ndarray, pb_in_a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Nearest-neighbour distance from each point of B (already in A's frame) to A, and
+    the same distance signed along A's local normal (20-NN PCA). A's scene units."""
+    tree = cKDTree(pa)
+    dist, idx = tree.query(pb_in_a, k=1, workers=-1)
+    a_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pa))
+    a_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamKNN(20))
+    na = np.asarray(a_pcd.normals)[idx]
+    return dist, np.einsum("ij,ij->i", pb_in_a - pa[idx], na)
+
+
+def doming(p_b_in_a: np.ndarray, signed: np.ndarray, extent: float) -> dict:
+    """How much of the signed residual is a smooth bowl.
+
+    Fits ``signed ≈ a + b u + c v + d u² + e uv + f v²`` over the overlap points, with
+    ``(u, v)`` the in-plane coordinates of the best-fit plane. Lengths are in the scene
+    units of half A; ``*_rel`` values divide by ``extent`` (diagonal of half A) so runs in
+    different gauges can be compared.
+
+    Returns:
+        ``amplitude``: 99th minus 1st percentile of the quadratic part (``d, e, f`` terms)
+        over the points; ``explained_fraction``: share of the residual variance the full
+        quadric explains; ``rms``: RMS of the signed residual.
+    """
+    c = p_b_in_a - p_b_in_a.mean(0)
+    _, _, vt = np.linalg.svd(c[:: max(1, len(c) // 50_000)], full_matrices=False)
+    u, v = (c @ vt[:2].T).T
+    sc = float(np.percentile(np.hypot(u, v), 99)) or 1.0
+    u, v = u / sc, v / sc  # conditioning only
+    A = np.c_[np.ones_like(u), u, v, u * u, u * v, v * v]
+    coef, *_ = np.linalg.lstsq(A, signed, rcond=None)
+    quad = A[:, 3:] @ coef[3:]
+    fit = A @ coef
+    amp = float(np.percentile(quad, 99) - np.percentile(quad, 1))
+    var = float(np.var(signed))
+    rms = float(np.sqrt(np.mean(signed**2)))
+    return {
+        "amplitude": amp,
+        "amplitude_rel_extent": amp / extent,
+        "explained_fraction": 1.0 - float(np.var(signed - fit)) / var if var > 0 else 0.0,
+        "rms": rms,
+        "rms_rel_extent": rms / extent,
+        "units": "scene units of half A",
+    }
+
+
+def align_and_measure(
+    ctx: StageContext, info_a: dict, info_b: dict, full: dict, rc: dict, seed: int
+) -> tuple[dict, dict, dict]:
+    """Align half B to half A, compare with the camera reference, measure residuals.
+
+    Writes ``subset_a.ply``, ``subset_b.ply``, ``subset_b_in_a.ply`` and ``c2c.png`` into
+    ``ctx.out_dir``. ``full`` is the full-scene ``cameras.json``.
+
+    Returns:
+        (transform record for ``T_b_to_a.json``, metrics, fine-alignment info).
+    """
+    pa = np.asarray(o3d.io.read_point_cloud(str(info_a["fused"])).points)
+    pcd_b = o3d.io.read_point_cloud(str(info_b["fused"]))
+    pb = np.asarray(pcd_b.points)
+    o3d.io.write_point_cloud(
+        str(ctx.out_dir / "subset_a.ply"), o3d.io.read_point_cloud(str(info_a["fused"]))
+    )
+    o3d.io.write_point_cloud(str(ctx.out_dir / "subset_b.ply"), pcd_b)
+
+    Na, Nb = normaliser(pa), normaliser(pb)
+    pa_n, pb_n = apply_T(Na, pa), apply_T(Nb, pb)
+    T0_n, coarse = coarse_align(pa_n, pb_n, rc, seed)
+    T_n, fine = fine_align(pa_n, pb_n, T0_n, rc)
+    T = np.linalg.inv(Na) @ T_n @ Nb  # T_a_from_b in native units
+    T_coarse = np.linalg.inv(Na) @ T0_n @ Nb
+    s, R, t = decompose(T)
+    s_a = 1.0 / Na[0, 0]  # A's normalisation radius, to convert normalised lengths
+
+    # Cloud-to-cloud distances, B aligned into A, in A's scene units.
+    pb_in_a = apply_T(T, pb)
+    dist, signed = signed_residual(pa, pb_in_a)
+    overlap_d = fine["max_correspondence_distance_normalised"] * s_a
+    ov = dist < overlap_d
+    spacing_a = median_nn_spacing(pa, seed=seed)
+    o3d.io.write_point_cloud(
+        str(ctx.out_dir / "subset_b_in_a.ply"),
+        o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pb_in_a)),
+    )
+    _c2c_figure(
+        pb_in_a, signed, float(np.percentile(np.abs(signed[ov]), 95)), ctx.out_dir / "c2c.png"
+    )
+
+    # Independent reference from camera poses in the full-scene model.
+    T_ref = np.linalg.inv(_camera_reference(full, info_a["cameras"])) @ _camera_reference(
+        full, info_b["cameras"]
+    )
+    s_ref, R_ref, t_ref = decompose(T_ref)
+    extent_a = float(np.linalg.norm(np.percentile(pa, 99, 0) - np.percentile(pa, 1, 0)))
+    ref = {
+        "T_a_from_b": T_ref.tolist(),
+        "scale": s_ref,
+        "scale_rel_error": s / s_ref - 1,
+        "rotation_error_deg": rotation_angle_deg(R @ R_ref.T),
+        "translation_error": float(np.linalg.norm(t - t_ref)),
+        "translation_error_rel_extent": float(np.linalg.norm(t - t_ref)) / extent_a,
+        "coarse_scale_rel_error": decompose(T_coarse)[0] / s_ref - 1,
+        "coarse_rotation_error_deg": rotation_angle_deg(decompose(T_coarse)[1] @ R_ref.T),
+    }
+
+    out = {
+        "T_a_from_b": T.tolist(),
+        "convention": "p_a = T_a_from_b @ [p_b, 1] = s R p_b + t; a, b are the native "
+        "SfM frames of the two half-reconstructions (non-metric)",
+        "scale": s,
+        "R": R.tolist(),
+        "t": t.tolist(),
+        "T_a_from_b_coarse": T_coarse.tolist(),
+        "camera_reference": ref,
+        "note": "One capture session split in two. Tests the estimator, not change over time.",
+    }
+
+    def sub(i: dict) -> dict:
+        return {k: v for k, v in i.items() if k not in ("cameras", "fused")}
+
+    metrics = {
+        "subset_a": {**sub(info_a), "n_points": int(len(pa))},
+        "subset_b": {**sub(info_b), "n_points": int(len(pb))},
+        "scale": s,
+        "rotation_angle_deg": rotation_angle_deg(R),
+        "translation": t.tolist(),
+        "translation_norm": float(np.linalg.norm(t)),
+        "coarse": coarse,
+        "icp_converged": fine["converged"],
+        "icp_iterations": fine["iterations"],
+        "icp_history": fine["history"],
+        "fitness": fine["fitness"],
+        "inlier_rmse": fine["inlier_rmse_normalised"] * s_a,
+        "units": "scene units of half A (non-metric)",
+        "a_median_nn_spacing": spacing_a,
+        "a_extent_diag": extent_a,
+        "c2c_all": {"median": float(np.median(dist)), "p95": float(np.percentile(dist, 95))},
+        "c2c_overlap": {
+            "threshold": overlap_d,
+            "fraction_of_b": float(ov.mean()),
+            "median": float(np.median(dist[ov])),
+            "p95": float(np.percentile(dist[ov], 95)),
+            "signed_median": float(np.median(signed[ov])),
+        },
+        "camera_reference": ref,
+    }
+    metrics["doming"] = doming(pb_in_a[ov], signed[ov], extent_a)
+    return out, metrics, fine
+
+
+def reconstruct_subset(
+    ctx: StageContext,
+    tag: str,
+    names: list[str],
+    colmap: Path,
+    fixed_camera_params: list[float] | None = None,
+) -> dict:
+    """SfM + MVS for one subset under ``<stage output>/<tag>/``.
+
+    ``fixed_camera_params`` keeps the intrinsics fixed during SfM (see ``colmap_sfm``).
+    """
     work = ctx.out_dir / tag
     raw = ctx.root / ctx.cfg["raw_dir"]
     seed = int(ctx.cfg["seed"])
-    sparse = colmap_sfm(colmap, raw, names, work / "colmap", ctx.cfg["sfm"], seed, work / "sfm.log")
+    sparse = colmap_sfm(
+        colmap,
+        raw,
+        names,
+        work / "colmap",
+        ctx.cfg["sfm"],
+        seed,
+        work / "sfm.log",
+        fixed_camera_params=fixed_camera_params,
+    )
     model_dir, rec, n_models = largest_model(sparse)
     cams = export_cameras(rec, model_dir.relative_to(work).as_posix())
     (work / "cameras.json").write_text(json.dumps(cams, indent=1), encoding="utf-8")
     n_reg = len(cams["images"])
     info = {
+        "camera_params": [float(v) for v in next(iter(rec.cameras.values())).params],
         "n_images": len(names),
         "n_registered": n_reg,
         "registered_fraction": n_reg / len(names),
@@ -324,103 +493,10 @@ def run(ctx: StageContext) -> None:
         "images_b": names_b,
     }
 
-    info_a = _reconstruct(ctx, "a", names_a, colmap)
-    info_b = _reconstruct(ctx, "b", names_b, colmap)
-    pa = np.asarray(o3d.io.read_point_cloud(str(info_a["fused"])).points)
-    pcd_b = o3d.io.read_point_cloud(str(info_b["fused"]))
-    pb = np.asarray(pcd_b.points)
-    o3d.io.write_point_cloud(
-        str(ctx.out_dir / "subset_a.ply"), o3d.io.read_point_cloud(str(info_a["fused"]))
-    )
-    o3d.io.write_point_cloud(str(ctx.out_dir / "subset_b.ply"), pcd_b)
-
-    Na, Nb = normaliser(pa), normaliser(pb)
-    pa_n, pb_n = apply_T(Na, pa), apply_T(Nb, pb)
-    T0_n, coarse = coarse_align(pa_n, pb_n, rc, seed)
-    T_n, fine = fine_align(pa_n, pb_n, T0_n, rc)
-    T = np.linalg.inv(Na) @ T_n @ Nb  # T_a_from_b in native units
-    T_coarse = np.linalg.inv(Na) @ T0_n @ Nb
-    s, R, t = decompose(T)
-    s_a = 1.0 / Na[0, 0]  # A's normalisation radius, to convert normalised lengths
-
-    # Cloud-to-cloud distances, B aligned into A, in A's scene units.
-    pb_in_a = apply_T(T, pb)
-    tree = cKDTree(pa)
-    dist, idx = tree.query(pb_in_a, k=1, workers=-1)
-    a_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pa))
-    a_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamKNN(20))
-    na = np.asarray(a_pcd.normals)[idx]
-    signed = np.einsum("ij,ij->i", pb_in_a - pa[idx], na)
-    overlap_d = fine["max_correspondence_distance_normalised"] * s_a
-    ov = dist < overlap_d
-    spacing_a = median_nn_spacing(pa, seed=seed)
-    o3d.io.write_point_cloud(
-        str(ctx.out_dir / "subset_b_in_a.ply"),
-        o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pb_in_a)),
-    )
-    _c2c_figure(
-        pb_in_a, signed, float(np.percentile(np.abs(signed[ov]), 95)), ctx.out_dir / "c2c.png"
-    )
-
-    # Independent reference from camera poses in the full-scene model.
+    info_a = reconstruct_subset(ctx, "a", names_a, colmap)
+    info_b = reconstruct_subset(ctx, "b", names_b, colmap)
     full = json.loads((ctx.stage_dir("sfm") / "cameras.json").read_text(encoding="utf-8"))
-    T_ref = np.linalg.inv(_camera_reference(full, info_a["cameras"])) @ _camera_reference(
-        full, info_b["cameras"]
-    )
-    s_ref, R_ref, t_ref = decompose(T_ref)
-    extent_a = float(np.linalg.norm(np.percentile(pa, 99, 0) - np.percentile(pa, 1, 0)))
-    ref = {
-        "T_a_from_b": T_ref.tolist(),
-        "scale": s_ref,
-        "scale_rel_error": s / s_ref - 1,
-        "rotation_error_deg": rotation_angle_deg(R @ R_ref.T),
-        "translation_error": float(np.linalg.norm(t - t_ref)),
-        "translation_error_rel_extent": float(np.linalg.norm(t - t_ref)) / extent_a,
-        "coarse_scale_rel_error": decompose(T_coarse)[0] / s_ref - 1,
-        "coarse_rotation_error_deg": rotation_angle_deg(decompose(T_coarse)[1] @ R_ref.T),
-    }
-
-    out = {
-        "T_a_from_b": T.tolist(),
-        "convention": "p_a = T_a_from_b @ [p_b, 1] = s R p_b + t; a, b are the native "
-        "SfM frames of the two half-reconstructions (non-metric)",
-        "scale": s,
-        "R": R.tolist(),
-        "t": t.tolist(),
-        "T_a_from_b_coarse": T_coarse.tolist(),
-        "camera_reference": ref,
-        "note": "One capture session split in two. Tests the estimator, not change over time.",
-    }
+    out, ctx.metrics, fine = align_and_measure(ctx, info_a, info_b, full, rc, seed)
     (ctx.out_dir / "T_b_to_a.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
-
-    def sub(i: dict) -> dict:
-        return {k: v for k, v in i.items() if k not in ("cameras", "fused")}
-
-    ctx.metrics = {
-        "subset_a": {**sub(info_a), "n_points": int(len(pa))},
-        "subset_b": {**sub(info_b), "n_points": int(len(pb))},
-        "scale": s,
-        "rotation_angle_deg": rotation_angle_deg(R),
-        "translation": t.tolist(),
-        "translation_norm": float(np.linalg.norm(t)),
-        "coarse": coarse,
-        "icp_converged": fine["converged"],
-        "icp_iterations": fine["iterations"],
-        "icp_history": fine["history"],
-        "fitness": fine["fitness"],
-        "inlier_rmse": fine["inlier_rmse_normalised"] * s_a,
-        "units": "scene units of half A (non-metric)",
-        "a_median_nn_spacing": spacing_a,
-        "a_extent_diag": extent_a,
-        "c2c_all": {"median": float(np.median(dist)), "p95": float(np.percentile(dist, 95))},
-        "c2c_overlap": {
-            "threshold": overlap_d,
-            "fraction_of_b": float(ov.mean()),
-            "median": float(np.median(dist[ov])),
-            "p95": float(np.percentile(dist[ov], 95)),
-            "signed_median": float(np.median(signed[ov])),
-        },
-        "camera_reference": ref,
-    }
     if not fine["converged"]:
         raise AcceptanceError(f"ICP did not converge in {fine['iterations']} iterations")

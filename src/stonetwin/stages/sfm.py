@@ -92,11 +92,16 @@ def colmap_sfm(
     scfg: dict,
     seed: int,
     log: Path,
+    fixed_camera_params: list[float] | None = None,
 ) -> Path:
     """Run COLMAP extraction, matching and mapping on ``names`` read from ``image_dir``.
 
     ``work`` is deleted and recreated (callers pass a folder inside their own stage
     output). Images are read in place, never copied or modified.
+
+    ``fixed_camera_params``: if given, the camera starts from these intrinsics (pixels,
+    in ``sfm.camera_model`` order) and bundle adjustment keeps focal length, principal
+    point and distortion fixed. Used by the ``register-control`` experiment.
 
     Returns:
         The ``sparse`` folder holding one sub-folder per model.
@@ -131,6 +136,14 @@ def colmap_sfm(
             str(scfg["max_num_features"]),
             "--default_random_seed",
             seed_s,
+            *(
+                [
+                    "--ImageReader.camera_params",
+                    ",".join(repr(float(v)) for v in fixed_camera_params),
+                ]
+                if fixed_camera_params is not None
+                else []
+            ),
         ],
         log,
     )
@@ -161,6 +174,18 @@ def colmap_sfm(
             seed_s,
             "--default_random_seed",
             seed_s,
+            *(
+                [
+                    "--Mapper.ba_refine_focal_length",
+                    "0",
+                    "--Mapper.ba_refine_principal_point",
+                    "0",
+                    "--Mapper.ba_refine_extra_params",
+                    "0",
+                ]
+                if fixed_camera_params is not None
+                else []
+            ),
         ],
         log,
     )

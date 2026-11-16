@@ -25,6 +25,7 @@ STAGE_DIRS: dict[str, str] = {
     "splat": "03_splat",
     "frame": "04_frame",
     "register": "05_register",
+    "register-control": "05_register_control",
     "segment": "06_segment",
     "attributes": "07_attributes",
     "evaluate": "08_evaluate",
