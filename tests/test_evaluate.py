@@ -5,14 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from stonetwin.stages.evaluate import (
-    derive_region,
-    map_shapes,
-    match,
-    rasterize_gt,
-    register_images,
-    restrict,
-)
+from stonetwin.annotation import map_shapes, register_images
+from stonetwin.stages.evaluate import derive_region, match, rasterize_gt, restrict
 
 
 def _sq(x0: int, y0: int, x1: int, y1: int, label: str = "stone") -> dict:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from stonetwin.stages.segment import rasterize, resolve_masks
+from stonetwin.stages.segment import apply_exclusion, rasterize, resolve_masks
 
 
 def test_rasterize_keeps_front_point_and_index() -> None:
@@ -67,3 +67,22 @@ def test_pair_counts_matches_naive_for_any_batch_size() -> None:
         codes, counts = pair_counts(nodes, starts, 30, batch)
         got = {(int(c // 30), int(c % 30)): int(n) for c, n in zip(codes, counts, strict=True)}
         assert got == dict(naive)
+
+
+def test_apply_exclusion_removes_mostly_inside_and_clips_the_rest() -> None:
+    lab = np.zeros((10, 10), np.int32)
+    lab[0:4, 0:4] = 1  # fully inside the exclusion -> removed
+    lab[0:4, 6:10] = 2  # untouched -> kept, renumbered
+    lab[6:10, 0:4] = 3  # one quarter inside -> kept, clipped
+    inside = np.zeros((10, 10), bool)
+    inside[0:4, 0:4] = True
+    inside[6:8, 0:2] = True
+    out, info = apply_exclusion(lab, inside, 0.5)
+    assert info == {"stones_before": 3, "stones_removed": 1, "stones_clipped": 1}
+    assert set(np.unique(out)) == {0, 1, 2}
+    assert (out[inside] == 0).all()
+    assert (out[0:4, 6:10] == 1).all()
+    assert (out[8:10, 0:4] == 2).all()
+    # Works on per-point labels too.
+    pts, _ = apply_exclusion(np.array([1, 1, 2, 2, 0]), np.array([1, 0, 0, 0, 1], bool), 0.5)
+    assert pts.tolist() == [0, 0, 1, 1, 0]

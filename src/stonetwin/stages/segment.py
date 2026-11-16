@@ -13,6 +13,12 @@ coordinates ``x in [x0 + c*gsd, x0 + (c+1)*gsd)``, ``y in (y0 - (r+1)*gsd, y0 - 
 ``x0`` is the left edge, ``y0`` the top edge. Units are scene units (relative; D-020).
 
 Method ``multiview``: see :mod:`stonetwin.stages.segment_multiview`.
+
+Exclusions (D-021): polygons labelled ``exclude`` in ``<annotations_dir>/<exclude_file>``
+mark non-stone objects (plaques, a door). They are drawn on the annotated orthophoto and
+mapped to this run's grid like the ground truth (D-019). For both methods, a stone with
+at least ``exclude_min_inside`` of its pixels (ortho) or points (multiview) inside an
+exclusion is removed; the rest are cut back to outside the exclusions.
 """
 
 from __future__ import annotations
@@ -203,8 +209,67 @@ def scale_params(seg: dict) -> dict[str, float]:
     }
 
 
+def apply_exclusion(
+    labels: np.ndarray, inside: np.ndarray, min_inside: float
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Drop labels mostly inside an exclusion, clear excluded elements, renumber 1..N.
+
+    Works on any label array (a raster or one label per point) with a boolean ``inside``
+    of the same shape. A label is dropped when at least ``min_inside`` of its elements
+    are inside.
+    """
+    n = int(labels.max()) if labels.size else 0
+    tot = np.bincount(labels.ravel(), minlength=n + 1)
+    ins = np.bincount(labels[inside].ravel(), minlength=n + 1)
+    ids = np.nonzero(tot[1:])[0] + 1
+    keep = ids[ins[ids] < min_inside * tot[ids]]
+    lut = np.zeros(n + 1, np.int32)
+    lut[keep] = np.arange(1, len(keep) + 1)
+    out = lut[labels]
+    out[inside] = 0
+    return out, {
+        "stones_before": len(ids),
+        "stones_removed": len(ids) - len(keep),
+        "stones_clipped": int(np.count_nonzero(ins[keep])),
+    }
+
+
+def exclusion_mask(ctx: StageContext, img: np.ndarray) -> tuple[np.ndarray | None, dict]:
+    """Boolean mask of the exclusion polygons on the grid of orthophoto ``img``.
+
+    Returns (None, info) when ``segment.exclude_file`` is null or the file is missing.
+    """
+    from stonetwin.annotation import shapes_on_current_grid
+
+    name = ctx.cfg["segment"].get("exclude_file")
+    if not name or not ctx.cfg.get("annotations_dir"):
+        return None, {"file": None}
+    path = ctx.root / ctx.cfg["annotations_dir"] / name
+    if not path.is_file():
+        return None, {"file": None, "missing": path.relative_to(ctx.root).as_posix()}
+    ann = json.loads(path.read_text(encoding="utf-8"))
+    ann["shapes"] = [s for s in ann["shapes"] if s["label"] == "exclude" and len(s["points"]) >= 3]
+    shapes, reg = shapes_on_current_grid(ann, path.parent / "ortho_ref.jpg", img)
+    mask = np.zeros(img.shape[:2], np.uint8)
+    for sh in shapes:
+        cv2.fillPoly(mask, [np.round(np.asarray(sh["points"])).astype(np.int32)], 1)
+    return mask.astype(bool), {
+        "file": path.relative_to(ctx.root).as_posix(),
+        "n_polygons": len(shapes),
+        "polygons": [sh.get("description") or sh["label"] for sh in shapes],
+        "area_px": int(mask.sum()),
+        "registration": reg,
+    }
+
+
 # --------------------------------------------------------------------------- ortho
-def run_ortho(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) -> dict:
+def run_ortho(
+    ctx: StageContext,
+    p_wall: np.ndarray,
+    rgb: np.ndarray,
+    tf: dict,
+    excl_px: np.ndarray | None = None,
+) -> dict:
     """Orthophoto baseline. Writes ``06_segment/ortho/``; returns metrics."""
     from stonetwin.sam import generate, load_generator
 
@@ -238,6 +303,10 @@ def run_ortho(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) 
         sp["max_area"] / px_area,
         seg["contain_frac"],
     )
+    excl_info = None
+    if excl_px is not None:
+        label, excl_info = apply_exclusion(label, excl_px, seg["exclude_min_inside"])
+        counts["stones"] = int(label.max())
     Image.fromarray(label.astype(np.uint16)).save(out / "labels.png")
     Image.fromarray(label_colours(label, int(ctx.cfg["seed"]))).save(out / "labels_vis.png")
     Image.fromarray(overlay_boundaries(img, label)).save(out / "labels_overlay.png")
@@ -254,6 +323,7 @@ def run_ortho(ctx: StageContext, p_wall: np.ndarray, rgb: np.ndarray, tf: dict) 
         "labelled_point_fraction": float((pts_labels > 0).mean()),
         "labelled_area_fraction": float((label > 0).sum() / cover.sum()),
         "sam_seconds": round(t_sam, 1),
+        "exclusion": excl_info,
     }
 
 
@@ -269,13 +339,37 @@ def run(ctx: StageContext) -> None:
     ctx.inputs = {"cloud": "04_frame/dense_wall.ply", "transform": "04_frame/transform.json"}
     p_wall, rgb, tf = load_wall(ctx)
     ctx.metrics = {"metric": tf["metric"], "n_points": int(len(p_wall))}
+
+    # Exclusion polygons on the orthophoto grid, and per point (D-021).
+    img, relief, pix, _ = rasterize(p_wall, rgb, scale_params(seg)["gsd"])
+    img, _, _ = fill_small_holes(img, relief, int(seg["ortho_hole_close_px"]))
+    del relief
+    excl_px, excl = exclusion_mask(ctx, img)
+    excl_pt = excl_px[pix[:, 0], pix[:, 1]] if excl_px is not None else None
+    if excl_px is not None:
+        reg = excl["registration"]
+        if reg.get("n_inliers", np.inf) < ctx.cfg["evaluate"]["min_registration_inliers"]:
+            raise AcceptanceError(f"exclusion registration has only {reg['n_inliers']} inliers")
+        excl["point_fraction"] = float(excl_pt.mean())
+        ctx.inputs["exclusions"] = excl["file"]
+    ctx.metrics["exclusions"] = excl
+    del img
+
     for method in seg["methods"]:
         if method == "ortho":
-            m = run_ortho(ctx, p_wall, rgb, tf)
+            m = run_ortho(ctx, p_wall, rgb, tf, excl_px)
         elif method == "multiview":
             from stonetwin.stages.segment_multiview import run_multiview
 
             m = run_multiview(ctx, p_wall, rgb, tf)
+            if excl_pt is not None:
+                f = ctx.out_dir / "multiview" / "points_labels.npy"
+                lab, m["exclusion"] = apply_exclusion(
+                    np.load(f), excl_pt, seg["exclude_min_inside"]
+                )
+                np.save(f, lab)
+                m["n_stones"] = int(lab.max())
+                m["labelled_point_fraction"] = float((lab > 0).mean())
         else:
             raise StageError(f"unknown segmentation method '{method}'")
         ctx.metrics[method] = m

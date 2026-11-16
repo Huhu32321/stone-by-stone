@@ -71,6 +71,8 @@ segment:
   multiview_affinity_threshold: 0.5
   contain_frac: 0.9                # a mask containing >= 90 % of a smaller one is dropped
   ortho_hole_close_px: 11          # closing size for the orthophoto coverage mask
+  exclude_file: exclude.json       # in annotations_dir; polygons labelled `exclude` (D-021)
+  exclude_min_inside: 0.5          # a stone this much inside an exclusion is removed
   multiview:
     depth_rel_tol: 0.02            # point kept in a view if |z - depth| <= 2 % of depth
     min_mask_px: 400               # per-image masks smaller than this are ignored

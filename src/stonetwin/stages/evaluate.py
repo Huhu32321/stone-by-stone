@@ -30,56 +30,9 @@ import open3d as o3d
 from PIL import Image
 from scipy.optimize import linear_sum_assignment
 
+from stonetwin.annotation import shapes_on_current_grid
 from stonetwin.stage import AcceptanceError, StageContext, StageError
 from stonetwin.stages.segment import points_to_ortho_labels
-
-
-def register_images(
-    ref: np.ndarray, cur: np.ndarray, ratio: float = 0.75, ransac_px: float = 3.0
-) -> tuple[np.ndarray, dict[str, float]]:
-    """Similarity mapping pixel coordinates of ``ref`` to ``cur`` (both RGB uint8).
-
-    SIFT features, Lowe ratio test, RANSAC on a 4-DoF similarity
-    (``cv2.estimateAffinePartial2D``).
-
-    Returns:
-        (2x3 matrix A with ``[x', y'] = A @ [x, y, 1]``, quality: n_matches, n_inliers,
-        rms residual of inliers in ``cur`` pixels, scale).
-    """
-    sift = cv2.SIFT_create(nfeatures=20000)
-    g = [cv2.cvtColor(im, cv2.COLOR_RGB2GRAY) for im in (ref, cur)]
-    (k1, d1), (k2, d2) = (sift.detectAndCompute(x, None) for x in g)
-    if d1 is None or d2 is None:
-        raise StageError("no features found to register the annotation image")
-    knn = cv2.BFMatcher(cv2.NORM_L2).knnMatch(d1, d2, k=2)
-    good = [m for m, n in (x for x in knn if len(x) == 2) if m.distance < ratio * n.distance]
-    if len(good) < 10:
-        raise StageError(f"only {len(good)} feature matches between annotation and orthophoto")
-    src = np.float32([k1[m.queryIdx].pt for m in good])
-    dst = np.float32([k2[m.trainIdx].pt for m in good])
-    A, inl = cv2.estimateAffinePartial2D(
-        src, dst, method=cv2.RANSAC, ransacReprojThreshold=ransac_px, maxIters=10000
-    )
-    if A is None:
-        raise StageError("could not register the annotation image to the orthophoto")
-    inl = inl.ravel().astype(bool)
-    res = (src[inl] @ A[:, :2].T + A[:, 2]) - dst[inl]
-    return A, {
-        "n_matches": len(good),
-        "n_inliers": int(inl.sum()),
-        "rms_px": float(np.sqrt((res**2).sum(1).mean())),
-        "scale": float(np.hypot(A[0, 0], A[1, 0])),
-    }
-
-
-def map_shapes(shapes: list[dict], A: np.ndarray, pre: float, post: float) -> list[dict]:
-    """Map shapes: ``p_out = post * (A @ [p_in * pre, 1])``."""
-    out = []
-    for sh in shapes:
-        q = np.asarray(sh["points"], float) * pre
-        q = (q @ A[:, :2].T + A[:, 2]) * post
-        out.append({**sh, "points": q.tolist()})
-    return out
 
 
 def rasterize_gt(shapes: list[dict], hw: tuple[int, int]) -> tuple[np.ndarray, np.ndarray | None]:
@@ -212,33 +165,10 @@ def run(ctx: StageContext) -> None:
     meta = json.loads((seg / "ortho" / "ortho_meta.json").read_text(encoding="utf-8"))
     ann = json.loads(gt_path.read_text(encoding="utf-8"))
     hw = (meta["height"], meta["width"])
-    ref_path = gt_path.parent / "ortho_ref.jpg"
-    reg_info: dict[str, Any] = {"method": "none (same grid)"}
-    if ref_path.is_file():
-        # The polygons were drawn on the orthophoto of an earlier run; without metric scale
-        # every SfM run has its own gauge, so the grid moves. Register the current
-        # orthophoto to a copy of the annotated one and map the polygons (D-019).
-        ref = np.asarray(Image.open(ref_path).convert("RGB"))
-        cur = np.asarray(Image.open(seg / "ortho" / "ortho.png").convert("RGB"))
-        k = ref.shape[1] / cur.shape[1]  # register at the reference's resolution
-        cur_s = cv2.resize(
-            cur, (ref.shape[1], round(cur.shape[0] * k)), interpolation=cv2.INTER_AREA
-        )
-        A, q = register_images(ref, cur_s)
-        pre = ref.shape[1] / ann["imageWidth"]
-        ann["shapes"] = map_shapes(ann["shapes"], A, pre, 1.0 / k)
-        reg_info = {
-            "method": "SIFT + RANSAC similarity to ortho_ref.jpg",
-            **q,
-            "rms_px_full_res": q["rms_px"] / k,
-        }
-        if q["n_inliers"] < ecfg["min_registration_inliers"]:
-            raise AcceptanceError(f"annotation registration has only {q['n_inliers']} inliers")
-    elif (ann.get("imageHeight"), ann.get("imageWidth")) != hw:
-        raise StageError(
-            "annotation image size differs from the orthophoto and there is no "
-            "ortho_ref.jpg to register against"
-        )
+    cur = np.asarray(Image.open(seg / "ortho" / "ortho.png").convert("RGB"))
+    ann["shapes"], reg_info = shapes_on_current_grid(ann, gt_path.parent / "ortho_ref.jpg", cur)
+    if reg_info.get("n_inliers", np.inf) < ecfg["min_registration_inliers"]:
+        raise AcceptanceError(f"annotation registration has only {reg_info['n_inliers']} inliers")
     gt, region = rasterize_gt(ann["shapes"], hw)
     region_source = "polygon"
     if region is None:

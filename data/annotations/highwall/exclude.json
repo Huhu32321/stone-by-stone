@@ -1,0 +1,85 @@
+{
+  "version": "7.11.0",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "exclude",
+      "points": [
+        [
+          1360.0,
+          718.1
+        ],
+        [
+          1670.3,
+          718.1
+        ],
+        [
+          1670.3,
+          1022.5
+        ],
+        [
+          1360.0,
+          1022.5
+        ]
+      ],
+      "group_id": null,
+      "description": "upper plaque (playground sign)",
+      "shape_type": "polygon",
+      "flags": {}
+    },
+    {
+      "label": "exclude",
+      "points": [
+        [
+          1693.7,
+          1338.6
+        ],
+        [
+          1910.3,
+          1338.6
+        ],
+        [
+          1910.3,
+          1584.4
+        ],
+        [
+          1693.7,
+          1584.4
+        ]
+      ],
+      "group_id": null,
+      "description": "metal door (hatch in the blocked arch)",
+      "shape_type": "polygon",
+      "flags": {}
+    },
+    {
+      "label": "exclude",
+      "points": [
+        [
+          1637.1,
+          1578.6
+        ],
+        [
+          1918.1,
+          1578.6
+        ],
+        [
+          1918.1,
+          1840.0
+        ],
+        [
+          1637.1,
+          1840.0
+        ]
+      ],
+      "group_id": null,
+      "description": "lower plaque (history panel)",
+      "shape_type": "polygon",
+      "flags": {}
+    }
+  ],
+  "imagePath": "ortho.png",
+  "imageData": null,
+  "imageHeight": 2455,
+  "imageWidth": 3122
+}
