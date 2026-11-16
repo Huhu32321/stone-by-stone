@@ -35,14 +35,33 @@ One capture session split in two by capture order; each half reconstructed separ
 
 ![cloud-to-cloud](figures/highwall_c2c.jpg)
 
-The signed residual on the wall is a smooth bowl, not noise: each half calibrated its own lens distortion, which bends each reconstruction slightly differently. A similarity transform cannot absorb it.
+### Control: intrinsics held fixed
+
+The same two halves were reconstructed again with focal length, principal point and distortion fixed to the full-scene model's values (no refinement in bundle adjustment), then aligned and measured the same way. Bowl amplitude: a quadric is fitted to the signed residual over the overlap, in the wall plane; the value is the spread (99th − 1st percentile) of its quadratic part. Lengths are divided by the diagonal of half A so the two runs, each in its own gauge, compare.
+
+| | each half calibrates itself | intrinsics fixed |
+|---|---|---|
+| Bowl amplitude (quadratic part, p99 − p1) / scene size | 0.180 % | 0.041 % |
+| Share of residual variance explained by a quadric | 0.36 | 0.11 |
+| Signed residual RMS / scene size | 0.079 % | 0.034 % |
+| Cloud-to-cloud median, overlap / scene size | 0.068 % | 0.031 % |
+| Scale error vs. camera reference | 0.99 % | 0.22 % |
+| Rotation error vs. camera reference (deg) | 0.196 | 0.141 |
+| Translation error / scene size | 0.215 % | 0.031 % |
+
+![cloud-to-cloud, intrinsics fixed](figures/highwall_c2c_fixed_intrinsics.jpg)
+
+Residual with the intrinsics fixed. Each residual figure clips its colour scale at its own 95th percentile of the absolute residual, so compare the colour bars, not only the colours.
+
+With the intrinsics fixed, the bowl and the scale error both shrink to less than half. The bowl in the baseline therefore comes mainly from each half calibrating its own lens distortion, which a near-parallel capture constrains poorly; a similarity transform cannot absorb it. A weaker large-scale pattern remains with the intrinsics fixed, so it is not the only source. Caveat: the fixed intrinsics and the camera-pose reference both come from the full-scene model, so the reference errors in the control are not fully independent of it; the bowl amplitude is measured cloud to cloud and does not use the reference.
 
 ## Stone segmentation (`highwall`)
 
 | | ortho (baseline) | multiview (main) |
 |---|---|---|
-| Stones found, whole wall | 284 | 383 |
-| Fraction of points labelled | 0.356 | 0.529 |
+| Stones found, whole wall | 278 | 378 |
+| Fraction of points labelled | 0.334 | 0.495 |
+| Stones removed by the 3 exclusion polygons (plaques, metal door; D-021) | 6 | 5 |
 | Ground-truth stones in region | 231 | 231 |
 | Predictions in region | 216 | 286 |
 | True positives | 105 | 142 |
@@ -69,12 +88,12 @@ Green: ground truth. Cyan: matched predictions. Red: unmatched predictions. Oran
 
 | Quantity | Value |
 |---|---|
-| Stones with records | 383 |
-| Median face area (scene units²) | 0.0665 |
+| Stones with records | 378 |
+| Median face area (scene units²) | 0.0640 |
 | Median roughness RMS (scene units) | 0.0041 |
-| Median colour ΔE00 to wall median | 7.40 |
+| Median colour ΔE00 to wall median | 7.31 |
 | Open cavity: stones / median recession (scene units) | 24 / -0.1103 |
 | Open cavity: fraction of stones set back | 1.00 |
-| Rest of wall: median / 5th pct recession (scene units) | 0.0010 / -0.0180 |
+| Rest of wall: median / 5th pct recession (scene units) | 0.0008 / -0.0179 |
 
 ![recession](figures/highwall_recession.png)

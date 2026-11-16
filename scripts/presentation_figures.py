@@ -500,8 +500,8 @@ def registration(m: dict) -> Path:
     s.text(
         84,
         784,
-        "Finding: the residual is a smooth bowl, not noise. Each half calibrated its "
-        "own lens distortion; a similarity cannot absorb the bend.",
+        "Finding: a smooth bowl a similarity cannot absorb. Holding the lens calibration "
+        "fixed shrinks it below half: mostly per-half calibration.",
         19,
         ACCENT,
         True,

@@ -127,6 +127,13 @@ independent reconstructions, so they do not share a gauge.
 State plainly in the report that this is one capture session split in two. It tests
 the estimator, not change over time.
 
+**Control `register-control` (D-022).** Reconstruct the same two subsets again with the
+intrinsics fixed to the full-scene model (no refinement in bundle adjustment), align and
+measure the same way, and report both runs side by side, including the bowl amplitude
+(quadric fitted to the signed residual over the overlap, spread of its quadratic part,
+relative to the scene diagonal). The causal reading of the bowl is stated only if the
+control at least halves both the bowl and the scale error.
+
 ### 4.6 segment
 
 Two methods, same output contract: `points_labels.npy`, an integer per point of
@@ -157,6 +164,11 @@ Two methods, same output contract: `points_labels.npy`, an integer per point of
 5. Label each point by majority vote over the clusters of the masks that see it.
    Points with weak support stay 0.
 6. Apply the same area filter in the wall plane.
+
+**Exclusions (both methods, D-021).** Polygons labelled `exclude` in
+`<annotations_dir>/exclude.json` (non-stone objects: plaques, a door) are mapped to the
+current orthophoto like the ground truth. A stone at least `exclude_min_inside` inside
+an exclusion is removed; the others are clipped to outside it.
 
 Write debug overlays for at least five views. Segmentation failures are far easier to
 diagnose from pictures than from numbers.
