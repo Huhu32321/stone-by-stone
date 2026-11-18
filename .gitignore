@@ -46,3 +46,5 @@ desktop.ini
 # --- local logs and duplicate annotation autosave ---
 debug.log
 data/annotations/highwall/ortho.json
+docs/DECISIONS.md
+docs/TASKS.md

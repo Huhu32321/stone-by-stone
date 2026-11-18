@@ -2,7 +2,7 @@
 
 This document fixes interfaces, outputs and acceptance checks. Where it says
 "choose in M0", make the choice from what is installed, then record it in
-[`DECISIONS.md`](DECISIONS.md). Library versions and APIs move quickly: check current
+the decision log (kept outside the public repository). Library versions and APIs move quickly: check current
 documentation before relying on remembered signatures.
 
 ## 1. Pipeline

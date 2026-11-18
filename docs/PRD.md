@@ -123,7 +123,7 @@ what gets reported, including results below target.
 
 ## 10. Milestones and gates
 
-Build order and acceptance criteria are in [`TASKS.md`](TASKS.md). There are three
+Build order and acceptance criteria are kept in an internal task list. There are three
 review gates where work stops until the author signs off:
 
 - **Gate 1** after reconstruction: is the geometry good enough to analyse?
